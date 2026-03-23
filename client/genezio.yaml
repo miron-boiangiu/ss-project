@@ -1,0 +1,14 @@
+name: mqtt-ss-client
+region: eu-central-1
+yamlVersion: 2
+frontend:
+  path: .
+  publish: dist
+  scripts:
+    deploy:
+      - npm install
+    build: npm run build
+    start:
+      - npm install
+      - npm run dev
+  subdomain: mqtt-ss

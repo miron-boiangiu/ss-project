@@ -1,0 +1,75 @@
+services:
+  # Go API Service
+  go-api:
+    build: ./server
+    user: "${UID}:${GID}"
+    container_name: go-api
+    image: stefandarius/mqtt-ss-api:latest
+    env_file: .env
+    environment:
+      - MQTT_HOST_IP=${HOST_IP:-host.docker.internal}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - mongo-db
+      - broker
+    ports:
+      - 8080:8080
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - backend
+    # TODO: Implement mTLS security - See docs/SECURITY_IMPLEMENTATION.md
+    # secrets:
+    #   - ca.crt
+    #   - web.crt
+    #   - web.key
+
+  broker:
+    user: "${UID}:${GID}"
+    image: eclipse-mosquitto:latest
+    container_name: broker
+    hostname: broker
+    ports:
+      # - "8883:8883"  # TODO: Uncomment for mTLS
+      - "1883:1883"
+    volumes:
+      - ./broker/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    networks:
+      - backend
+    # TODO: Implement mTLS security - See docs/SECURITY_IMPLEMENTATION.md
+    # secrets:
+    #   - ca.crt
+    #   - server.crt
+    #   - server.key
+
+  mongo-db:
+    container_name: mongo-db
+    image: mongo:latest
+    env_file: .env
+    command: ["--auth"]
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - backend
+
+volumes:
+  mongo-data:
+
+networks:
+  backend:
+
+# TODO: Implement mTLS security - See docs/SECURITY_IMPLEMENTATION.md
+# secrets:
+#   ca.crt:
+#     file: ./secrets/ca.crt
+#   web.crt:
+#     file: ./secrets/web.crt
+#   web.key:
+#     file: ./secrets/web.key
+#   server.crt:
+#     file: ./secrets/server.crt
+#   server.key:
+#     file: ./secrets/server.key

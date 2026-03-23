@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Camera body -->
+  <rect x="40" y="60" width="120" height="80" rx="10" fill="#4B93D5" stroke="#0F5298" stroke-width="4"/>
+  
+  <!-- Camera lens -->
+  <circle cx="100" cy="100" r="30" fill="#0F5298" stroke="#4B93D5" stroke-width="2"/>
+  <circle cx="100" cy="100" r="20" fill="#F0F8FF" stroke="#0F5298" stroke-width="2"/>
+  <circle cx="100" cy="100" r="10" fill="#0F5298"/>
+  
+  <!-- Camera flash -->
+  <rect x="135" y="70" width="15" height="15" rx="3" fill="#F7F7F7" stroke="#0F5298" stroke-width="2"/>
+  
+  <!-- Text extraction visualization -->
+  <rect x="70" y="140" width="60" height="20" rx="3" fill="#F7F7F7" stroke="#0F5298" stroke-width="2"/>
+  <path d="M75 150H85" stroke="#0F5298" stroke-width="2" stroke-linecap="round"/>
+  <path d="M90 150H115" stroke="#0F5298" stroke-width="2" stroke-linecap="round"/>
+  <path d="M75 158H105" stroke="#0F5298" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Magnifying glass representing search -->
+  <circle cx="130" cy="50" r="15" fill="none" stroke="#0F5298" stroke-width="3"/>
+  <line x1="141" y1="60" x2="150" y2="70" stroke="#0F5298" stroke-width="3" stroke-linecap="round"/>
+</svg> 

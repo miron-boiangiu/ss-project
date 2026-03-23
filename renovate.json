@@ -1,0 +1,64 @@
+{
+  "enabled": false,
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "matchManagers": [
+        "npm"
+      ],
+      "groupName": "client dependencies",
+      "labels": [
+        "frontend",
+        "dependencies"
+      ],
+      "matchPackageNames": [
+        "*"
+      ]
+    },
+    {
+      "matchManagers": [
+        "gomod"
+      ],
+      "groupName": "server dependencies",
+      "labels": [
+        "backend",
+        "dependencies"
+      ],
+      "matchPackageNames": [
+        "*"
+      ]
+    },
+    {
+      "matchManagers": [
+        "gradle"
+      ],
+      "groupName": "android dependencies",
+      "labels": [
+        "android",
+        "dependencies"
+      ],
+      "matchPackageNames": [
+        "*"
+      ]
+    }
+  ],
+  "timezone": "Europe/Berlin",
+  "labels": [
+    "dependencies"
+  ],
+  "vulnerabilityAlerts": {
+    "labels": [
+      "security"
+    ],
+    "schedule": "at any time"
+  },
+  "prConcurrentLimit": 5,
+  "baseBranches": [
+    "main"
+  ],
+  "assignees": [],
+  "reviewers": []
+}

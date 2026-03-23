@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
+  <!-- Acorn cap -->
+  <path d="M10 8C10 4.68629 12.6863 2 16 2C19.3137 2 22 4.68629 22 8C22 8 23 12 16 12C9 12 10 8 10 8Z" fill="#8B5E3C"/>
+  <path d="M10 8C10 4.68629 12.6863 2 16 2C19.3137 2 22 4.68629 22 8C22 8 23 12 16 12C9 12 10 8 10 8Z" stroke="#5D4037" stroke-width="1.5"/>
+  
+  <!-- Acorn body -->
+  <path d="M9 12C9 12 8 13 8 15C8 22 9 28 16 28C23 28 24 22 24 15C24 13 23 12 23 12C23 12 20 14 16 14C12 14 9 12 9 12Z" fill="#A67C52"/>
+  <path d="M9 12C9 12 8 13 8 15C8 22 9 28 16 28C23 28 24 22 24 15C24 13 23 12 23 12C23 12 20 14 16 14C12 14 9 12 9 12Z" stroke="#5D4037" stroke-width="1.5"/>
+  
+  <!-- Binary/code elements inside -->
+  <text x="12.5" y="20" font-family="monospace" font-size="3" fill="#FFFFFF">01</text>
+  <text x="16" y="24" font-family="monospace" font-size="3" fill="#FFFFFF">10</text>
+  <text x="14" y="22" font-family="monospace" font-size="3" fill="#FFFFFF">{}</text>
+  
+  <!-- Highlight shine -->
+  <path d="M14 10C14 10 14.5 8 16 8C17.5 8 18 9 18 9" stroke="#FFFFFF" stroke-width="1" stroke-linecap="round"/>
+</svg>
