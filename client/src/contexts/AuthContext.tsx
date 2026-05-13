@@ -1,9 +1,3 @@
-// TODO: Implement authentication - See docs/AUTH_IMPLEMENTATION.md
-// This file currently bypasses authentication. To implement real auth:
-// 1. Remove the auto-login in useEffect
-// 2. Validate JWT tokens from the backend
-// 3. Store and use real tokens for API requests
-
 import React, { createContext, useState, useContext, useEffect } from 'react';
 
 interface AuthContextType {
@@ -15,13 +9,11 @@ interface AuthContextType {
   logout: () => void;
 }
 
-
-
 const AuthContext = createContext<AuthContextType>({
   isLoggedIn: false,
   token: null,
   loading: true,
-  isAdmin: true,
+  isAdmin: false,
   login: () => { },
   logout: () => { },
 });
@@ -34,33 +26,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // TODO: Implement real authentication
-  // Currently auto-logging in as guest (no real authentication)
   useEffect(() => {
-    // Auto-login as guest for development (authentication not implemented)
-    setToken('guest-placeholder-token');
-    setIsLoggedIn(true);
-    setIsAdmin(true);
-    setLoading(false);
-
-    // Original implementation (uncomment when implementing real auth):
-    /*
     const storedToken = localStorage.getItem('token');
     if (storedToken) {
       setToken(storedToken);
       setIsLoggedIn(true);
-      setIsAdmin(true);
+      try {
+        const payload = JSON.parse(atob(storedToken.split('.')[1]));
+        setIsAdmin(payload.role === 'admin');
+      } catch {
+        setIsAdmin(false);
+      }
     }
     setLoading(false);
-    */
   }, []);
 
   const login = (newToken: string) => {
     localStorage.setItem('token', newToken);
     setToken(newToken);
     setIsLoggedIn(true);
-
-    setIsAdmin(true);
+    try {
+      const payload = JSON.parse(atob(newToken.split('.')[1]));
+      setIsAdmin(payload.role === 'admin');
+    } catch {
+      setIsAdmin(false);
+    }
   };
 
   const logout = () => {
