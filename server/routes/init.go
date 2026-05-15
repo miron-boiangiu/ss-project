@@ -3,10 +3,12 @@ package routes
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 
+	"github.com/golang-jwt/jwt/v4"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -98,33 +100,20 @@ func withCORS(next http.Handler) http.Handler {
 	})
 }
 
-// TODO: Implement authentication - See docs/AUTH_IMPLEMENTATION.md
-// noAuth is a placeholder middleware that passes all requests through without authentication.
-// Replace this with withAuth once you implement JWT or Basic authentication.
-func noAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// No authentication - pass through with placeholder context values
-		ctx := context.WithValue(r.Context(), "email", "guest@example.com")
-		ctx = context.WithValue(ctx, "role", "user")
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-// TODO: Implement JWT authentication - See docs/AUTH_IMPLEMENTATION.md
-// Example implementation commented below:
-/*
-import "github.com/golang-jwt/jwt/v4"
-
 func withAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Parse the JWT token from the Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			http.Error(w, "Authorization header missing", http.StatusUnauthorized)
 			return
 		}
 
-		tokenString := authHeader[len("Bearer "):] // Remove "Bearer " prefix
+		if len(authHeader) < 7 || authHeader[:7] != "Bearer " {
+			http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
+			return
+		}
+
+		tokenString := authHeader[7:]
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -136,27 +125,18 @@ func withAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		// Extract email from token claims
 		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok || !token.Valid {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-			return
-		}
-		email, ok := claims["email"].(string)
 		if !ok {
 			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
 			return
 		}
-		role, ok := claims["role"].(string)
-		if !ok {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-			return
-		}
-		// Store the email in the request context
+
+		email, _ := claims["email"].(string)
+		role, _ := claims["role"].(string)
+
 		ctx := context.WithValue(r.Context(), "email", email)
 		ctx = context.WithValue(ctx, "role", role)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
-*/
 

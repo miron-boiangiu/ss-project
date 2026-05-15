@@ -23,10 +23,9 @@ func InitDeviceRoutes(db *mongo.Database, mqttClient mqtt.Client, mux *http.Serv
 		mqttClient:       mqttClient,
 	}
 
-	// TODO: Implement authentication - See docs/AUTH_IMPLEMENTATION.md
-	mux.Handle("/devices", noAuth(http.HandlerFunc(deviceController.GetDevices)))
-	mux.Handle("/devices/switch", noAuth(http.HandlerFunc(deviceController.SwitchDeviceMode)))
-	mux.Handle("/devices/command", noAuth(http.HandlerFunc(deviceController.SendCommand)))
+	mux.Handle("/devices", withAuth(http.HandlerFunc(deviceController.GetDevices)))
+	mux.Handle("/devices/switch", withAuth(http.HandlerFunc(deviceController.SwitchDeviceMode)))
+	mux.Handle("/devices/command", withAuth(http.HandlerFunc(deviceController.SendCommand)))
 }
 
 func (ctlr DeviceController) SwitchDeviceMode(w http.ResponseWriter, r *http.Request) {
