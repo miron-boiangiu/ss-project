@@ -104,9 +104,12 @@ func (ctlr PhotoController) DeletePhoto(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if !requireRole(r, roleAdmin) {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
 	ctx := r.Context()
-
-
 
 	// Extract photo ID from URL path: /photos/{id}
 	path := strings.TrimPrefix(r.URL.Path, "/photos/")
@@ -149,9 +152,12 @@ func (ctlr PhotoController) DeleteAllPhotos(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if !requireRole(r, roleAdmin) {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
 	ctx := r.Context()
-
-
 
 	// Delete all photos from database
 	deletedCount, err := ctlr.PhotoRepository.DeleteAll(ctx)
