@@ -3,33 +3,35 @@ package repository
 import (
 	"context"
 
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mqtt-streaming-server/domain"
 )
 
 type UserRepository struct {
-	db *mongo.Database
+	db *pgxpool.Pool
 }
 
-func NewUserRepository(db *mongo.Database) *UserRepository {
+func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
 func (repo *UserRepository) Save(ctx context.Context, email, password string) error {
-	collection := repo.db.Collection("users")
-	_, err := collection.InsertOne(ctx, domain.User{
-		Email:    email,
-		Password: password,
-		Role:     "user",
-	})
+	_, err := repo.db.Exec(ctx,
+		"INSERT INTO users (email, password, role) VALUES ($1, $2, 'user')",
+		email, password)
 	return err
 }
 
 func (repo *UserRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
-	collection := repo.db.Collection("users")
 	var user domain.User
-	err := collection.FindOne(ctx, map[string]string{"email": email}).Decode(&user)
+	err := repo.db.QueryRow(ctx,
+		"SELECT email, password, role FROM users WHERE email = $1", email).
+		Scan(&user.Email, &user.Password, &user.Role)
+	if err == pgx.ErrNoRows {
+		return nil, err
+	}
 	if err != nil {
 		return nil, err
 	}

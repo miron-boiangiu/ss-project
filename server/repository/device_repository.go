@@ -3,61 +3,70 @@ package repository
 import (
 	"context"
 
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mqtt-streaming-server/domain"
 )
 
 type deviceRepository struct {
-	db *mongo.Database
+	db *pgxpool.Pool
 }
 
-func NewDeviceRepository(db *mongo.Database) *deviceRepository {
+func NewDeviceRepository(db *pgxpool.Pool) *deviceRepository {
 	return &deviceRepository{db: db}
 }
 
 func (repo *deviceRepository) GetAllDevices(ctx context.Context) ([]*domain.Device, error) {
-	collection := repo.db.Collection("devices")
-	var devices []*domain.Device
-	cursor, err := collection.Find(ctx, map[string]any{})
+	rows, err := repo.db.Query(ctx,
+		"SELECT id, device_id, device_name, device_status, ip_address, port, last_seen FROM devices")
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer rows.Close()
 
-	for cursor.Next(ctx) {
+	var devices []*domain.Device
+	for rows.Next() {
 		var device domain.Device
-		if err := cursor.Decode(&device); err != nil {
+		err := rows.Scan(&device.ID, &device.DeviceID, &device.DeviceName,
+			&device.DeviceStatus, &device.IPAddress, &device.Port, &device.LastSeen)
+		if err != nil {
 			return nil, err
 		}
 		devices = append(devices, &device)
 	}
-
-	if err := cursor.Err(); err != nil {
-		return nil, err
-	}
-
-	return devices, nil
+	return devices, rows.Err()
 }
 
 func (repo *deviceRepository) Save(ctx context.Context, device *domain.Device) error {
-	collection := repo.db.Collection("devices")
-	_, err := collection.InsertOne(ctx, device)
+	_, err := repo.db.Exec(ctx,
+		`INSERT INTO devices (device_id, device_name, device_status, ip_address, port, last_seen)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		device.DeviceID, device.DeviceName, device.DeviceStatus,
+		device.IPAddress, device.Port, device.LastSeen)
 	return err
 }
 
 func (repo *deviceRepository) Update(ctx context.Context, deviceID string, device *domain.Device) error {
-	collection := repo.db.Collection("devices")
-	_, err := collection.UpdateOne(ctx, map[string]string{"device_id": deviceID}, map[string]any{"$set": device})
+	_, err := repo.db.Exec(ctx,
+		`UPDATE devices SET device_name = $1, device_status = $2, ip_address = $3, port = $4, last_seen = $5
+		 WHERE device_id = $6`,
+		device.DeviceName, device.DeviceStatus, device.IPAddress, device.Port, device.LastSeen, deviceID)
 	return err
 }
 
 func (repo *deviceRepository) GetByID(ctx context.Context, deviceID string) (*domain.Device, error) {
-	collection := repo.db.Collection("devices")
-	var device *domain.Device
-	err := collection.FindOne(ctx, map[string]string{"device_id": deviceID}).Decode(&device)
+	var device domain.Device
+	err := repo.db.QueryRow(ctx,
+		"SELECT id, device_id, device_name, device_status, ip_address, port, last_seen FROM devices WHERE device_id = $1",
+		deviceID).
+		Scan(&device.ID, &device.DeviceID, &device.DeviceName,
+			&device.DeviceStatus, &device.IPAddress, &device.Port, &device.LastSeen)
+	if err == pgx.ErrNoRows {
+		return nil, err
+	}
 	if err != nil {
 		return nil, err
 	}
-	return device, nil
+	return &device, nil
 }
