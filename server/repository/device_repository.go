@@ -25,7 +25,7 @@ func (repo *deviceRepository) GetAllDevices(ctx context.Context) ([]*domain.Devi
 	}
 	defer rows.Close()
 
-	var devices []*domain.Device
+	devices := make([]*domain.Device, 0)
 	for rows.Next() {
 		var device domain.Device
 		err := rows.Scan(&device.ID, &device.DeviceID, &device.DeviceName,
