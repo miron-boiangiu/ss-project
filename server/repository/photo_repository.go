@@ -26,8 +26,7 @@ func (repo *photoRepository) GetPhotos(ctx context.Context, filters map[string]a
 		societate_unitate, adresa_angajator, telefon_angajator,
 		nume, prenume, cnp, profesie_functie, loc_de_munca, tip_control,
 		control_angajare, control_periodic, control_adaptare, control_reluare, control_supraveghere, control_alte,
-		aviz_medical, aviz_apt, aviz_apt_conditionat, aviz_inapt_temporar, aviz_inapt,
-		recomandari, data, data_urm_examinari
+		aviz_medical, recomandari, data, data_urm_examinari
 		FROM photos`
 
 	var conditions []string
@@ -82,8 +81,7 @@ func (repo *photoRepository) GetPhotos(ctx context.Context, filters map[string]a
 			&photo.SocietateUnitate, &photo.AdresaAngajator, &photo.TelefonAngajator,
 			&photo.Nume, &photo.Prenume, &photo.CNP, &photo.ProfesieFunctie, &photo.LocDeMunca, &photo.TipControl,
 			&photo.ControlAngajare, &photo.ControlPeriodic, &photo.ControlAdaptare, &photo.ControlReluare, &photo.ControlSupraveghere, &photo.ControlAlte,
-			&photo.AvizMedical, &photo.AvizApt, &photo.AvizAptConditionat, &photo.AvizInaptTemporar, &photo.AvizInapt,
-			&photo.Recomandari, &photo.Data, &photo.DataUrmExaminari,
+			&photo.AvizMedical, &photo.Recomandari, &photo.Data, &photo.DataUrmExaminari,
 		)
 		if err != nil {
 			return nil, err
@@ -114,16 +112,14 @@ func (repo *photoRepository) Save(ctx context.Context, photo *domain.Photo) erro
 			societate_unitate, adresa_angajator, telefon_angajator,
 			nume, prenume, cnp, profesie_functie, loc_de_munca, tip_control,
 			control_angajare, control_periodic, control_adaptare, control_reluare, control_supraveghere, control_alte,
-			aviz_medical, aviz_apt, aviz_apt_conditionat, aviz_inapt_temporar, aviz_inapt,
-			recomandari, data, data_urm_examinari)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)`,
+			aviz_medical, recomandari, data, data_urm_examinari)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)`,
 		photo.ID, photo.Timestamp, photo.ImageType, photo.DeviceID, photo.Text,
 		photo.UnitateMedicala, photo.AdresaUnitateMedicala, photo.TelefonUnitateMedicala, photo.NumarFisa,
 		photo.SocietateUnitate, photo.AdresaAngajator, photo.TelefonAngajator,
 		photo.Nume, photo.Prenume, photo.CNP, photo.ProfesieFunctie, photo.LocDeMunca, photo.TipControl,
 		photo.ControlAngajare, photo.ControlPeriodic, photo.ControlAdaptare, photo.ControlReluare, photo.ControlSupraveghere, photo.ControlAlte,
-		photo.AvizMedical, photo.AvizApt, photo.AvizAptConditionat, photo.AvizInaptTemporar, photo.AvizInapt,
-		photo.Recomandari, photo.Data, photo.DataUrmExaminari)
+		photo.AvizMedical, photo.Recomandari, photo.Data, photo.DataUrmExaminari)
 	return err
 }
 
@@ -135,8 +131,7 @@ func (repo *photoRepository) GetByID(ctx context.Context, id string) (*domain.Ph
 			societate_unitate, adresa_angajator, telefon_angajator,
 			nume, prenume, cnp, profesie_functie, loc_de_munca, tip_control,
 			control_angajare, control_periodic, control_adaptare, control_reluare, control_supraveghere, control_alte,
-			aviz_medical, aviz_apt, aviz_apt_conditionat, aviz_inapt_temporar, aviz_inapt,
-			recomandari, data, data_urm_examinari
+			aviz_medical, recomandari, data, data_urm_examinari
 		 FROM photos WHERE id = $1`, id).
 		Scan(
 			&photo.ID, &photo.Timestamp, &photo.ImageType, &photo.DeviceID, &photo.Text,
@@ -144,8 +139,7 @@ func (repo *photoRepository) GetByID(ctx context.Context, id string) (*domain.Ph
 			&photo.SocietateUnitate, &photo.AdresaAngajator, &photo.TelefonAngajator,
 			&photo.Nume, &photo.Prenume, &photo.CNP, &photo.ProfesieFunctie, &photo.LocDeMunca, &photo.TipControl,
 			&photo.ControlAngajare, &photo.ControlPeriodic, &photo.ControlAdaptare, &photo.ControlReluare, &photo.ControlSupraveghere, &photo.ControlAlte,
-			&photo.AvizMedical, &photo.AvizApt, &photo.AvizAptConditionat, &photo.AvizInaptTemporar, &photo.AvizInapt,
-			&photo.Recomandari, &photo.Data, &photo.DataUrmExaminari,
+			&photo.AvizMedical, &photo.Recomandari, &photo.Data, &photo.DataUrmExaminari,
 		)
 	if err != nil {
 		return nil, err

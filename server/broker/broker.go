@@ -128,10 +128,6 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 		photo.ControlAlte = medicalData.ControlAlte
 
 		photo.AvizMedical = medicalData.AvizMedical
-		photo.AvizApt = medicalData.AvizApt
-		photo.AvizAptConditionat = medicalData.AvizAptConditionat
-		photo.AvizInaptTemporar = medicalData.AvizInaptTemporar
-		photo.AvizInapt = medicalData.AvizInapt
 
 		photo.Recomandari = medicalData.Recomandari
 		if !medicalData.Data.IsZero() {

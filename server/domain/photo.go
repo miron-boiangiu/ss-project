@@ -34,11 +34,7 @@ type Photo struct {
 	ControlSupraveghere    bool   `json:"control_supraveghere"`
 	ControlAlte            bool   `json:"control_alte"`
 
-	AvizMedical        string `json:"aviz_medical"`
-	AvizApt            bool   `json:"aviz_apt"`
-	AvizAptConditionat bool   `json:"aviz_apt_conditionat"`
-	AvizInaptTemporar  bool   `json:"aviz_inapt_temporar"`
-	AvizInapt          bool   `json:"aviz_inapt"`
+	AvizMedical string `json:"aviz_medical"`
 	Recomandari        string `json:"recomandari"`
 	Data               string `json:"data"`
 	DataUrmExaminari   string `json:"data_urm_examinari"`

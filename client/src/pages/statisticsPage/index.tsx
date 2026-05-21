@@ -15,12 +15,12 @@ import {
     Cell,
 } from 'recharts';
 
-// Interface for photo data, including the new boolean fields
+// Interface for photo data
 interface Photo {
     id: string;
     timestamp: string;
 
-    // Boolean fields from backend
+    // Control type booleans
     control_angajare?: boolean;
     control_periodic?: boolean;
     control_adaptare?: boolean;
@@ -28,10 +28,8 @@ interface Photo {
     control_supraveghere?: boolean;
     control_alte?: boolean;
 
-    aviz_apt?: boolean;
-    aviz_apt_conditionat?: boolean;
-    aviz_inapt_temporar?: boolean;
-    aviz_inapt?: boolean;
+    // Medical opinion (exclusive: "APT", "APT CONDITIONAT", "INAPT TEMPORAR", "INAPT")
+    aviz_medical?: string;
 }
 
 const StatisticsPage: React.FC = () => {
@@ -121,10 +119,11 @@ const StatisticsPage: React.FC = () => {
         };
 
         photos.forEach(photo => {
-            if (photo.aviz_apt) stats['APT']++;
-            if (photo.aviz_apt_conditionat) stats['APT Conditionat']++;
-            if (photo.aviz_inapt_temporar) stats['Inapt Temporar']++;
-            if (photo.aviz_inapt) stats['Inapt']++;
+            const aviz = (photo.aviz_medical || '').toUpperCase();
+            if (aviz === 'APT') stats['APT']++;
+            else if (aviz === 'APT CONDITIONAT') stats['APT Conditionat']++;
+            else if (aviz === 'INAPT TEMPORAR') stats['Inapt Temporar']++;
+            else if (aviz === 'INAPT') stats['Inapt']++;
         });
 
         return Object.entries(stats).map(([name, value]) => ({ name, value }));

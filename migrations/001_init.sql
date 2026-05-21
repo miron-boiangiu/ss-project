@@ -42,10 +42,6 @@ CREATE TABLE photos (
     control_supraveghere      BOOLEAN NOT NULL DEFAULT FALSE,
     control_alte              BOOLEAN NOT NULL DEFAULT FALSE,
     aviz_medical              TEXT NOT NULL DEFAULT '',
-    aviz_apt                  BOOLEAN NOT NULL DEFAULT FALSE,
-    aviz_apt_conditionat      BOOLEAN NOT NULL DEFAULT FALSE,
-    aviz_inapt_temporar       BOOLEAN NOT NULL DEFAULT FALSE,
-    aviz_inapt                BOOLEAN NOT NULL DEFAULT FALSE,
     recomandari               TEXT NOT NULL DEFAULT '',
     data                      TEXT NOT NULL DEFAULT '',
     data_urm_examinari        TEXT NOT NULL DEFAULT ''
