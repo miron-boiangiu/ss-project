@@ -3,6 +3,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@custom-variant dark (&:where(.dark, .dark *));
 
 @keyframes scaleIn {
   0% {
@@ -15,7 +16,6 @@
   }
 }
 
-/* Add the animation to Tailwind classes */
 @layer utilities {
   .animate-scaleIn {
     animation: scaleIn 0.2s ease-out forwards;
