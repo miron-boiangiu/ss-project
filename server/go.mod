@@ -12,6 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/otiai10/gosseract/v2 v2.4.1
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	go.uber.org/mock v0.5.2
 	golang.org/x/crypto v0.38.0
 )
