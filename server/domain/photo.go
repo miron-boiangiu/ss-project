@@ -38,6 +38,11 @@ type Photo struct {
 	Recomandari        string `json:"recomandari"`
 	Data               string `json:"data"`
 	DataUrmExaminari   string `json:"data_urm_examinari"`
+
+	// Confidence & review (PR 1, task 2.B)
+	NeedsReview       bool               `json:"needs_review"`
+	OverallConfidence float64            `json:"overall_confidence"`
+	FieldConfidences  map[string]float64 `json:"field_confidences"`
 }
 
 type PhotoRepository interface {

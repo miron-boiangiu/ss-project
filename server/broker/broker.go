@@ -8,6 +8,7 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -24,13 +25,15 @@ type BrokerHandler struct {
 	photoRepository  domain.PhotoRepository
 	deviceRepository domain.DeviceRepository
 	ocrClient        *gosseract.Client
+	reviewThreshold  float64
 }
 
-func NewBrokerHandler(db *pgxpool.Pool, ocrClient *gosseract.Client) BrokerHandler {
+func NewBrokerHandler(db *pgxpool.Pool, ocrClient *gosseract.Client, reviewThreshold float64) BrokerHandler {
 	return BrokerHandler{
 		photoRepository:  repository.NewPhotoRepository(db),
 		deviceRepository: repository.NewDeviceRepository(db),
 		ocrClient:        ocrClient,
+		reviewThreshold:  reviewThreshold,
 	}
 }
 
@@ -79,7 +82,7 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 	fmt.Printf("Image type: %s\n", imageType)
 
 	// Extract text from image
-	text, err := b.extractTextFromImage(body)
+	text, words, err := b.extractTextFromImage(body)
 	if err != nil {
 		fmt.Printf("Failed to extract text from image: %v\n", err)
 		text = "OCR failed"
@@ -88,9 +91,12 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 	// Try to extract structured medical data
 	var medicalData *utils.MedicalData
 	if utils.IsMedicalCertificate(text) {
-		medicalData = utils.ParseMedicalCertificate(text)
+		medicalData = utils.ParseMedicalCertificate(text, words)
 		if medicalData != nil {
-			fmt.Printf("Extracted medical data: %+v\n", medicalData)
+			medicalData.NeedsReview = utils.ShouldReview(medicalData.OverallConfidence, b.reviewThreshold)
+			// Log only counts and stats — never field values (PHI).
+			fmt.Printf("Extracted medical data: fields=%d, overall_conf=%.1f, needs_review=%v\n",
+				len(medicalData.FieldConfidences), medicalData.OverallConfidence, medicalData.NeedsReview)
 		}
 	}
 
@@ -136,6 +142,10 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 		if !medicalData.DataUrmExaminari.IsZero() {
 			photo.DataUrmExaminari = medicalData.DataUrmExaminari.Format(time.RFC3339)
 		}
+
+		photo.NeedsReview = medicalData.NeedsReview
+		photo.OverallConfidence = medicalData.OverallConfidence
+		photo.FieldConfidences = medicalData.FieldConfidences
 	}
 
 	err = b.photoRepository.Save(ctx, photo)
@@ -250,13 +260,44 @@ func (b BrokerHandler) DisconnectDevice(_ mqtt.Client, msg mqtt.Message) {
 	_ = err
 }
 
-func (b BrokerHandler) extractTextFromImage(imageData []byte) (string, error) {
-	b.ocrClient.SetImageFromBytes(imageData)
-	text, err := b.ocrClient.Text()
-	if err != nil {
-		return "", fmt.Errorf("failed to extract text from image: %v", err)
+// extractTextFromImage runs OCR on imageData and returns both the joined OCR
+// text and the per-word boxes it was built from. Within a layout line words are
+// joined with a single space; a newline is inserted whenever Tesseract reports
+// a new block, paragraph or line — the medical parser's regexes depend on
+// newlines. Each WordBox records its byte offset into the returned text.
+func (b BrokerHandler) extractTextFromImage(imageData []byte) (string, []utils.WordBox, error) {
+	if err := b.ocrClient.SetImageFromBytes(imageData); err != nil {
+		return "", nil, fmt.Errorf("failed to set image for OCR: %w", err)
 	}
-	return text, nil
+
+	// Verbose boxes carry Tesseract's own block/paragraph/line numbers, which
+	// is what lets us rebuild newlines from the flat word stream.
+	boxes, err := b.ocrClient.GetBoundingBoxesVerbose()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to extract text from image: %w", err)
+	}
+
+	var sb strings.Builder
+	words := make([]utils.WordBox, 0, len(boxes))
+	for i, box := range boxes {
+		if i > 0 {
+			prev := boxes[i-1]
+			if box.BlockNum != prev.BlockNum || box.ParNum != prev.ParNum || box.LineNum != prev.LineNum {
+				sb.WriteByte('\n')
+			} else {
+				sb.WriteByte(' ')
+			}
+		}
+		words = append(words, utils.WordBox{
+			Word:       box.Word,
+			Confidence: box.Confidence,
+			BBox:       box.Box,
+			Offset:     sb.Len(),
+		})
+		sb.WriteString(box.Word)
+	}
+
+	return sb.String(), words, nil
 }
 
 func (b BrokerHandler) HandleCommand(_ mqtt.Client, msg mqtt.Message) {

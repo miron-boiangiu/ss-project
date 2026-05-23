@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -55,7 +56,7 @@ func main() {
 	ocrClient := gosseract.NewClient()
 	ocrClient.SetLanguage("eng", "ron")
 	defer ocrClient.Close()
-	brokerHandler := broker.NewBrokerHandler(pool, ocrClient)
+	brokerHandler := broker.NewBrokerHandler(pool, ocrClient, readReviewThreshold())
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker("tcp://broker:1883")
@@ -94,4 +95,21 @@ func main() {
 	}()
 
 	<-c
+}
+
+// readReviewThreshold returns the OCR confidence threshold below which an
+// extracted document is flagged for manual review. It is configured via the
+// OCR_REVIEW_THRESHOLD environment variable and defaults to 80.
+func readReviewThreshold() float64 {
+	const defaultThreshold = 80.0
+	v := os.Getenv("OCR_REVIEW_THRESHOLD")
+	if v == "" {
+		return defaultThreshold
+	}
+	t, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		fmt.Printf("Invalid OCR_REVIEW_THRESHOLD %q, using default %.0f\n", v, defaultThreshold)
+		return defaultThreshold
+	}
+	return t
 }
