@@ -21,3 +21,11 @@
     animation: scaleIn 0.2s ease-out forwards;
   }
 }
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
