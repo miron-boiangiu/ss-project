@@ -6,8 +6,16 @@ import (
 	"time"
 )
 
+// schemaVersion is the semver of the JSON Schema (server/schema/medical-data.v1.json)
+// that MedicalData payloads conform to. Bump when the schema changes shape.
+const schemaVersion = "1.0.0"
+
 // MedicalData reprezinta datele structurate extrase din fisa de aptitudine medicala
 type MedicalData struct {
+	// Schema identification (PR 2, task 2.B)
+	DocumentType  string `json:"document_type" bson:"document_type"`   // document class discriminator, e.g. "fisa_aptitudine"
+	SchemaVersion string `json:"schema_version" bson:"schema_version"` // semver of the JSON Schema this payload conforms to
+
 	// Header - Unitatea Medicala
 	UnitateMedicala        string `json:"unitate_medicala" bson:"unitate_medicala"`                 // UNITATEA MEDICALA
 	AdresaUnitateMedicala  string `json:"adresa_unitate_medicala" bson:"adresa_unitate_medicala"`   // ADRESA (sus)
@@ -62,6 +70,12 @@ func ParseMedicalCertificate(ocrText string, words []WordBox) *MedicalData {
 	}
 
 	data := &MedicalData{
+		// The broker guards this call with IsMedicalCertificate, so a non-nil
+		// return implies the document is an aptitude form. Stamp the schema
+		// identifiers unconditionally; future document classes will pick a
+		// different DocumentType.
+		DocumentType:     "fisa_aptitudine",
+		SchemaVersion:    schemaVersion,
 		FieldConfidences: make(map[string]float64),
 	}
 
