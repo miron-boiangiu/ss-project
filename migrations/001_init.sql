@@ -47,7 +47,9 @@ CREATE TABLE photos (
     data_urm_examinari        TEXT NOT NULL DEFAULT '',
     needs_review              BOOLEAN NOT NULL DEFAULT FALSE,
     overall_confidence        DOUBLE PRECISION NOT NULL DEFAULT 0,
-    field_confidences         JSONB NOT NULL DEFAULT '{}'::jsonb
+    field_confidences         JSONB NOT NULL DEFAULT '{}'::jsonb,
+    document_type             TEXT NOT NULL DEFAULT 'fisa_aptitudine',
+    schema_version            TEXT NOT NULL DEFAULT '1.0.0'
 );
 
 CREATE INDEX idx_photos_timestamp ON photos(timestamp DESC);

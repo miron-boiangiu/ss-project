@@ -43,6 +43,10 @@ type Photo struct {
 	NeedsReview       bool               `json:"needs_review"`
 	OverallConfidence float64            `json:"overall_confidence"`
 	FieldConfidences  map[string]float64 `json:"field_confidences"`
+
+	// Schema identification (PR 2, task 2.B)
+	DocumentType  string `json:"document_type"`
+	SchemaVersion string `json:"schema_version"`
 }
 
 type PhotoRepository interface {

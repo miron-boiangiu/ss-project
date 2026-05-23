@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ss-project.local/schema/medical-data.v1.json",
+  "title": "MedicalData",
+  "description": "Structured output produced by the OCR parser for a Romanian Fișă de Aptitudine document. v1 of this schema covers occupational-medicine aptitude forms; future versions, discriminated by document_type, may add other document classes.",
+  "type": "object",
+  "required": [
+    "document_type",
+    "schema_version",
+    "overall_confidence",
+    "needs_review",
+    "field_confidences"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "document_type": {
+      "type": "string",
+      "enum": ["fisa_aptitudine"],
+      "description": "Discriminator for the document class this payload describes. Single-valued in v1; extend the enum when adding new document classes."
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version of the schema this payload was produced against."
+    },
+    "overall_confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Minimum of all populated entries in field_confidences. 0 means nothing was extracted."
+    },
+    "needs_review": {
+      "type": "boolean",
+      "description": "True when overall_confidence is positive yet below the configured review threshold."
+    },
+    "field_confidences": {
+      "type": "object",
+      "description": "Per-field confidence, keyed by the snake_case field name. Only fields the parser populated with a positive confidence appear here.",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100
+      }
+    },
+
+    "unitate_medicala": { "type": "string" },
+    "adresa_unitate_medicala": { "type": "string" },
+    "telefon_unitate_medicala": { "type": "string" },
+
+    "numar_fisa": { "type": "string" },
+
+    "societate_unitate": { "type": "string" },
+    "adresa_angajator": { "type": "string" },
+    "telefon_angajator": { "type": "string" },
+
+    "nume": { "type": "string" },
+    "prenume": { "type": "string" },
+    "cnp": { "type": "string" },
+
+    "profesie_functie": { "type": "string" },
+    "loc_de_munca": { "type": "string" },
+
+    "tip_control": { "type": "string" },
+    "control_angajare": { "type": "boolean" },
+    "control_periodic": { "type": "boolean" },
+    "control_adaptare": { "type": "boolean" },
+    "control_reluare": { "type": "boolean" },
+    "control_supraveghere": { "type": "boolean" },
+    "control_alte": { "type": "boolean" },
+
+    "aviz_medical": { "type": "string" },
+    "aviz_apt": { "type": "boolean" },
+    "aviz_apt_conditionat": { "type": "boolean" },
+    "aviz_inapt_temporar": { "type": "boolean" },
+    "aviz_inapt": { "type": "boolean" },
+
+    "recomandari": { "type": "string" },
+    "data": { "type": "string" },
+    "data_urm_examinari": { "type": "string" }
+  }
+}
