@@ -38,7 +38,7 @@ class ImageUploader:
         self.device_id = device_id
         self.device_name = device_name
         self.register_topic = f"register/{device_id}"
-        self.photo_topic = f"photos/{device_id}"
+        self.photo_topic = f"ssproject/images/{device_id}"
         self.images_to_send = []
         self.current_index = 0
         self.connected = False
@@ -57,7 +57,7 @@ class ImageUploader:
     
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            print(f"✓ Conectat la MQTT Broker ({BROKER}:{PORT})")
+            print(f"Connected to MQTT Broker ({BROKER}:{PORT})")
             self.connected = True
             
             # Register the device
@@ -67,7 +67,7 @@ class ImageUploader:
                 "ip": local_ip,
                 "port": str(PORT)
             })
-            print(f"✓ Înregistrare dispozitiv: {self.device_id}")
+            print(f"Registering device: {self.device_id}")
             client.publish(self.register_topic, registration)
             time.sleep(0.5)
             self.registered = True
@@ -75,7 +75,7 @@ class ImageUploader:
             # Start sending images
             self.send_next_image(client)
         else:
-            print(f"✗ Eroare conexiune, cod: {rc}")
+            print(f"Connection error, code: {rc}")
             sys.exit(1)
     
     def on_publish(self, client, userdata, mid):
@@ -85,7 +85,7 @@ class ImageUploader:
     
     def send_next_image(self, client):
         if self.current_index >= len(self.images_to_send):
-            print(f"\n✓ Toate imaginile au fost trimise ({len(self.images_to_send)} imagini)")
+            print(f"\nAll images sent ({len(self.images_to_send)} images)")
             client.disconnect()
             return
         
@@ -95,11 +95,11 @@ class ImageUploader:
                 image_data = f.read()
             
             client.publish(self.photo_topic, image_data)
-            print(f"  [{self.current_index + 1}/{len(self.images_to_send)}] Trimis: {os.path.basename(image_path)}")
+            print(f"  [{self.current_index + 1}/{len(self.images_to_send)}] Sent: {os.path.basename(image_path)}")
             self.current_index += 1
             
         except Exception as e:
-            print(f"✗ Eroare la citirea imaginii {image_path}: {e}")
+            print(f"Error reading image {image_path}: {e}")
             self.current_index += 1
             self.send_next_image(client)
     
@@ -107,11 +107,11 @@ class ImageUploader:
         # Find all images in folder
         folder = Path(folder_path)
         if not folder.exists():
-            print(f"✗ Folder-ul nu există: {folder_path}")
+            print(f"Folder does not exist: {folder_path}")
             return
         
         if not folder.is_dir():
-            print(f"✗ Calea specificată nu este un folder: {folder_path}")
+            print(f"Path is not a directory: {folder_path}")
             return
         
         # Collect all image files
@@ -120,18 +120,18 @@ class ImageUploader:
                 self.images_to_send.append(str(file_path))
         
         if not self.images_to_send:
-            print(f"✗ Nu s-au găsit imagini în folder-ul: {folder_path}")
-            print(f"  Formate suportate: {', '.join(SUPPORTED_EXTENSIONS)}")
+            print(f"No images found in folder: {folder_path}")
+            print(f"  Supported formats: {', '.join(SUPPORTED_EXTENSIONS)}")
             return
         
         # Sort images by name for consistent ordering
         self.images_to_send.sort()
         
-        print(f"\n📁 Folder: {folder_path}")
-        print(f"📸 Găsite {len(self.images_to_send)} imagini")
-        print(f"🔧 Device ID: {self.device_id}")
-        print(f"📡 Server: {BROKER}:{PORT}\n")
-        print("Se încarcă imaginile...\n")
+        print(f"\nFolder: {folder_path}")
+        print(f"Found {len(self.images_to_send)} images")
+        print(f"Device ID: {self.device_id}")
+        print(f"Server: {BROKER}:{PORT}\n")
+        print("Uploading images...\n")
         
         # Create MQTT client
         client = mqtt.Client(client_id=self.device_id)
@@ -147,10 +147,10 @@ class ImageUploader:
             client.connect(BROKER, PORT, 60)
             client.loop_forever()
         except KeyboardInterrupt:
-            print("\n\n⚠ Întrerupt de utilizator")
+            print("\n\nInterrupted by user")
             client.disconnect()
         except Exception as e:
-            print(f"\n✗ Eroare de conexiune: {e}")
+            print(f"\nConnection error: {e}")
             sys.exit(1)
 
 def main():

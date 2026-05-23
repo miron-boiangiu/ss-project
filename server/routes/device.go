@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mqtt-streaming-server/domain"
 	"mqtt-streaming-server/repository"
@@ -17,7 +17,7 @@ type DeviceController struct {
 	mqttClient       mqtt.Client
 }
 
-func InitDeviceRoutes(db *mongo.Database, mqttClient mqtt.Client, mux *http.ServeMux) {
+func InitDeviceRoutes(db *pgxpool.Pool, mqttClient mqtt.Client, mux *http.ServeMux) {
 	deviceController := &DeviceController{
 		DeviceRepository: repository.NewDeviceRepository(db),
 		mqttClient:       mqttClient,
@@ -33,10 +33,6 @@ func (ctlr DeviceController) SwitchDeviceMode(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-
-
-
 
 	var device struct {
 		ID   string `json:"id"`
@@ -64,9 +60,6 @@ func (ctlr DeviceController) GetDevices(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-
-
-	// Fetch devices from the database
 	devices, err := ctlr.DeviceRepository.GetAllDevices(ctx)
 	if err != nil {
 		http.Error(w, "Failed to fetch devices", http.StatusInternalServerError)
@@ -83,7 +76,6 @@ func (ctlr DeviceController) SendCommand(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-
 	var request struct {
 		DeviceID string `json:"device_id"`
 		Command  string `json:"command"`
@@ -93,7 +85,6 @@ func (ctlr DeviceController) SendCommand(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Validate command
 	validCommands := map[string]bool{
 		"CAPTURE":    true,
 		"START-LIVE": true,
@@ -104,7 +95,6 @@ func (ctlr DeviceController) SendCommand(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Publish command to MQTT topic ssproject/commands
 	topic := "ssproject/commands"
 	payload := request.Command
 	if token := ctlr.mqttClient.Publish(topic, 0, false, payload); token.Wait() && token.Error() != nil {
