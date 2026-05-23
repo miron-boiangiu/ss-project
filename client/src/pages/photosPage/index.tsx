@@ -271,11 +271,11 @@ const PhotosPage: React.FC = () => {
       <h1 className="text-2xl font-semibold text-sky-700 mb-6">Photos</h1>
 
       {/* Search and filter section */}
-      <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm mb-6">
         <div className="flex flex-wrap items-end gap-4">
           {/* Text search */}
           <div className="flex-1 min-w-[200px]">
-            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-sky-700 mb-1">
               Search Text
             </label>
             <input
@@ -284,13 +284,13 @@ const PhotosPage: React.FC = () => {
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder="Search text in photos..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
             />
           </div>
 
           {/* Start date */}
           <div>
-            <label htmlFor="start-date" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="start-date" className="block text-sm font-medium text-gray-700 dark:text-sky-700 mb-1">
               Start Date
             </label>
             <input
@@ -298,13 +298,13 @@ const PhotosPage: React.FC = () => {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
             />
           </div>
 
           {/* End date */}
           <div>
-            <label htmlFor="end-date" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="end-date" className="block text-sm font-medium text-gray-700 dark:text-sky-700 mb-1">
               End Date
             </label>
             <input
@@ -312,21 +312,21 @@ const PhotosPage: React.FC = () => {
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
             />
           </div>
 
           {/* Device dropdown - always shown, with or without device data */}
           {!deviceLoading && (
             <div>
-              <label htmlFor="device" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="device" className="block text-sm font-medium text-gray-700 dark:text-sky-700 mb-1">
                 Device
               </label>
               <select
                 id="device"
                 value={selectedDevice}
                 onChange={(e) => setSelectedDevice(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
               >
                 <option value="all">All</option>
                 {!deviceError && devices.map(device => (
@@ -363,8 +363,8 @@ const PhotosPage: React.FC = () => {
           <div className="w-px h-10 bg-gray-300 mx-2 hidden md:block"></div>
 
           {/* ESP Camera Controls */}
-          <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-md border border-gray-200">
-            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">ESP Camera:</span>
+          <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-700 p-2 rounded-md border border-gray-200 dark:border-gray-600">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">ESP Camera:</span>
 
             <div className="flex gap-2">
               <button
@@ -441,7 +441,7 @@ const PhotosPage: React.FC = () => {
       )}
 
       {/* Photos section with fixed height and scroll */}
-      <div className="bg-gray-50 p-4 rounded-lg shadow-sm overflow-y-auto max-h-[60vh]">
+      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-sm overflow-y-auto max-h-[60vh]">
         {/* Loading state */}
         {photosLoading && (
           <div className="flex justify-center items-center h-40">
@@ -461,7 +461,7 @@ const PhotosPage: React.FC = () => {
         {!photosLoading && !photosError && (
           <>
             {(photos || []).length === 0 ? (
-              <div className="text-center text-gray-500 py-10">
+              <div className="text-center text-gray-500 dark:text-gray-400 py-10">
                 No photos found matching your search criteria
               </div>
             ) : (
