@@ -11,7 +11,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - mongo-db
+      - postgres
       - broker
     ports:
       - 8080:8080
@@ -19,11 +19,6 @@ services:
       - ./uploads:/app/uploads
     networks:
       - backend
-    # TODO: Implement mTLS security - See docs/SECURITY_IMPLEMENTATION.md
-    # secrets:
-    #   - ca.crt
-    #   - web.crt
-    #   - web.key
 
   broker:
     user: "${UID}:${GID}"
@@ -31,45 +26,26 @@ services:
     container_name: broker
     hostname: broker
     ports:
-      # - "8883:8883"  # TODO: Uncomment for mTLS
       - "1883:1883"
     volumes:
       - ./broker/mosquitto.conf:/mosquitto/config/mosquitto.conf
     networks:
       - backend
-    # TODO: Implement mTLS security - See docs/SECURITY_IMPLEMENTATION.md
-    # secrets:
-    #   - ca.crt
-    #   - server.crt
-    #   - server.key
 
-  mongo-db:
-    container_name: mongo-db
-    image: mongo:latest
+  postgres:
+    container_name: postgres
+    image: postgres:16-alpine
     env_file: .env
-    command: ["--auth"]
     ports:
-      - "27019:27017"
+      - "5432:5432"
     volumes:
-      - mongo-data:/data/db
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
     networks:
       - backend
 
 volumes:
-  mongo-data:
+  postgres-data:
 
 networks:
   backend:
-
-# TODO: Implement mTLS security - See docs/SECURITY_IMPLEMENTATION.md
-# secrets:
-#   ca.crt:
-#     file: ./secrets/ca.crt
-#   web.crt:
-#     file: ./secrets/web.crt
-#   web.key:
-#     file: ./secrets/web.key
-#   server.crt:
-#     file: ./secrets/server.crt
-#   server.key:
-#     file: ./secrets/server.key

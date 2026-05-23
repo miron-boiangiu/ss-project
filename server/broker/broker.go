@@ -11,8 +11,9 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/otiai10/gosseract/v2"
-	"go.mongodb.org/mongo-driver/mongo"
 
 	"mqtt-streaming-server/domain"
 	"mqtt-streaming-server/repository"
@@ -25,7 +26,7 @@ type BrokerHandler struct {
 	ocrClient        *gosseract.Client
 }
 
-func NewBrokerHandler(db *mongo.Database, ocrClient *gosseract.Client) BrokerHandler {
+func NewBrokerHandler(db *pgxpool.Pool, ocrClient *gosseract.Client) BrokerHandler {
 	return BrokerHandler{
 		photoRepository:  repository.NewPhotoRepository(db),
 		deviceRepository: repository.NewDeviceRepository(db),
@@ -51,9 +52,8 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 	// get registered device
 	device, err := b.deviceRepository.GetByID(ctx, deviceID)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if err == pgx.ErrNoRows {
 			fmt.Printf("Device ID not found: %s. Auto-registering...\n", deviceID)
-			// Auto-register the device
 			newDevice := &domain.Device{
 				DeviceID:     deviceID,
 				DeviceName:   "Unknown Device (" + deviceID + ")",
@@ -84,7 +84,7 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 		fmt.Printf("Failed to extract text from image: %v\n", err)
 		text = "OCR failed"
 	}
-	
+
 	// Try to extract structured medical data
 	var medicalData *utils.MedicalData
 	if utils.IsMedicalCertificate(text) {
@@ -93,10 +93,10 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 			fmt.Printf("Extracted medical data: %+v\n", medicalData)
 		}
 	}
-	
+
 	// UTC timestamp
 	timestamp := time.Now().UTC()
-	
+
 	// Create photo with flattened medical data
 	photo := &domain.Photo{
 		ImageType: imageType,
@@ -104,7 +104,7 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 		DeviceID:  deviceID,
 		Text:      text,
 	}
-	
+
 	// Copy medical data fields directly to photo (flattened)
 	if medicalData != nil {
 		photo.UnitateMedicala = medicalData.UnitateMedicala
@@ -128,19 +128,19 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 		photo.ControlAlte = medicalData.ControlAlte
 
 		photo.AvizMedical = medicalData.AvizMedical
-		photo.AvizApt = medicalData.AvizApt
-		photo.AvizAptConditionat = medicalData.AvizAptConditionat
-		photo.AvizInaptTemporar = medicalData.AvizInaptTemporar
-		photo.AvizInapt = medicalData.AvizInapt
 
 		photo.Recomandari = medicalData.Recomandari
-		photo.Data = medicalData.Data
-		photo.DataUrmExaminari = medicalData.DataUrmExaminari
+		if !medicalData.Data.IsZero() {
+			photo.Data = medicalData.Data.Format(time.RFC3339)
+		}
+		if !medicalData.DataUrmExaminari.IsZero() {
+			photo.DataUrmExaminari = medicalData.DataUrmExaminari.Format(time.RFC3339)
+		}
 	}
-	
+
 	err = b.photoRepository.Save(ctx, photo)
 	if err != nil {
-		fmt.Printf("Failed to insert photo into MongoDB: %v\n", err)
+		fmt.Printf("Failed to insert photo into database: %v\n", err)
 		return
 	}
 	// Save photo locally
@@ -178,11 +178,11 @@ func (b BrokerHandler) RegisterDevice(_ mqtt.Client, msg mqtt.Message) {
 
 	// Check if device ID already exists
 	_, err := b.deviceRepository.GetByID(ctx, deviceID)
-	if err != nil && err != mongo.ErrNoDocuments {
+	if err != nil && err != pgx.ErrNoRows {
 		fmt.Printf("Failed to check device ID: %v\n", err)
 		return
 	}
-	if err == mongo.ErrNoDocuments {
+	if err == pgx.ErrNoRows {
 		// Device ID does not exist, insert it
 		err = b.deviceRepository.Save(ctx, &domain.Device{
 			DeviceID:     deviceID,
@@ -229,15 +229,14 @@ func (b BrokerHandler) DisconnectDevice(_ mqtt.Client, msg mqtt.Message) {
 	fmt.Println("Received message on topic:", msg.Topic())
 	message := string(msg.Payload())
 	fmt.Printf("Received device disconnection: %s\n", message)
-	
+
 	if message != "Device Disconnected" {
 		fmt.Printf("Invalid disconnection message: %s\n", message)
 		return
 	}
-	
+
 	device, err := b.deviceRepository.GetByID(ctx, deviceID)
 	if err != nil {
-		// handle error
 		return
 	}
 	if device.DeviceStatus != "active" {
@@ -248,10 +247,10 @@ func (b BrokerHandler) DisconnectDevice(_ mqtt.Client, msg mqtt.Message) {
 		DeviceStatus: "inactive",
 		DeviceName:   device.DeviceName,
 	})
+	_ = err
 }
 
 func (b BrokerHandler) extractTextFromImage(imageData []byte) (string, error) {
-	// Use the OCR client to extract text from the image
 	b.ocrClient.SetImageFromBytes(imageData)
 	text, err := b.ocrClient.Text()
 	if err != nil {

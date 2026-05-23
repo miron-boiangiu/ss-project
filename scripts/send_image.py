@@ -110,8 +110,8 @@ def on_publish(client, userdata, mid):
     # Note: connect sends no message, register is mid=1, photo is mid=2
     if mid == 2:
         print("Message published successfully!")
-        print(f"\n✅ Device '{DEVICE_ID}' registered and photo sent!")
-        print(f"   Topic: {PHOTO_TOPIC}")
+        print(f"Device '{DEVICE_ID}' registered and photo sent!")
+        print(f"  Topic: {PHOTO_TOPIC}")
         client.disconnect()
         sys.exit(0)
 

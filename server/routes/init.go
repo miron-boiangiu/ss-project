@@ -10,17 +10,16 @@ import (
 
 	"github.com/golang-jwt/jwt/v4"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func InitRoutes(db *mongo.Database, mqttClient mqtt.Client) http.Handler {
+func InitRoutes(db *pgxpool.Pool, mqttClient mqtt.Client) http.Handler {
 	mux := http.NewServeMux()
 	InitUserRoutes(db, mux)
 	InitPhotoRoutes(db, mux)
 	InitDeviceRoutes(db, mqttClient, mux)
 
 	// Serve static files from ./uploads
-	// Ensure the directory exists or handle errors gracefully, but FileServer is robust enough.
 	fs := http.FileServer(http.Dir("uploads"))
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
 
@@ -29,20 +28,17 @@ func InitRoutes(db *mongo.Database, mqttClient mqtt.Client) http.Handler {
 
 	corsHandler := withCORS(mux)
 
-	// Add other middleware here if needed
 	return corsHandler
 }
 
-// handleBrokerInfo returns the MQTT broker IP and port for client connections
 func handleBrokerInfo(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get the server's local IP address
 	ip := getOutboundIP()
-	port := "1883" // Default MQTT port
+	port := "1883"
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
@@ -51,28 +47,21 @@ func handleBrokerInfo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// getOutboundIP gets the preferred outbound IP of this machine
-// In Docker, we need to use the host's external IP, not the container IP
 func getOutboundIP() string {
-	// First, check if MQTT_HOST_IP is set explicitly
 	if hostIP := os.Getenv("MQTT_HOST_IP"); hostIP != "" {
-		// If it's a hostname (like host.docker.internal), resolve it
 		if addrs, err := net.LookupHost(hostIP); err == nil && len(addrs) > 0 {
 			return addrs[0]
 		}
-		// If it's already an IP, return as-is
 		if net.ParseIP(hostIP) != nil {
 			return hostIP
 		}
 	}
 
-	// Try to resolve host.docker.internal (works in Docker Desktop)
 	addrs, err := net.LookupHost("host.docker.internal")
 	if err == nil && len(addrs) > 0 {
 		return addrs[0]
 	}
 
-	// Fallback: detect outbound IP
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		return "localhost"
@@ -85,12 +74,10 @@ func getOutboundIP() string {
 
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set CORS headers
-		w.Header().Set("Access-Control-Allow-Origin", "*") // Replace * with your domain in production
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-		// Handle preflight requests
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -139,4 +126,3 @@ func withAuth(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
-

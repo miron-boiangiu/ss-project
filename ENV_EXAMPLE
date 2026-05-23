@@ -1,0 +1,23 @@
+# Docker/User context
+UID=1000
+GID=1000
+
+# PostgreSQL
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=supersecret
+POSTGRES_DB=mqtt_streaming_server
+
+# JWT
+JWT_SECRET=change-me-to-a-random-secret
+
+# Encryption (32 bytes, hex-encoded — generate with: openssl rand -hex 32)
+ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+# MQTT host IP (used by clients to connect to the broker)
+HOST_IP=host.docker.internal
+
+# AWS S3 (optional — only needed if using S3 for photo storage)
+AWS_ACCESS_KEY=your-aws-access-key
+AWS_SECRET_KEY=your-aws-secret-key
+AWS_REGION=us-east-1
+S3_BUCKET_NAME=your-bucket-name

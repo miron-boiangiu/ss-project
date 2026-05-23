@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
 	"mqtt-streaming-server/domain"
@@ -19,7 +20,7 @@ type UserController struct {
 	UserRepository domain.UserRepository
 }
 
-func InitUserRoutes(db *mongo.Database, mux *http.ServeMux) {
+func InitUserRoutes(db *pgxpool.Pool, mux *http.ServeMux) {
 	userController := &UserController{
 		UserRepository: repository.NewUserRepository(db),
 	}
@@ -43,7 +44,7 @@ func (ctlr UserController) Register(w http.ResponseWriter, r *http.Request) {
 
 	// look for existing user
 	existingUser, err := ctlr.UserRepository.FindByEmail(r.Context(), req.Email)
-	if err != nil && err != mongo.ErrNoDocuments {
+	if err != nil && err != pgx.ErrNoRows {
 		http.Error(w, "Failed to check existing user", http.StatusInternalServerError)
 		return
 	}
@@ -128,16 +129,13 @@ func (ctlr UserController) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Retrieve the user's profile from the database
 	user, err := ctlr.UserRepository.FindByEmail(r.Context(), email)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
-	// Exclude the password from the response
 	user.Password = ""
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }
-
