@@ -23,7 +23,7 @@ func TestBrokerHandler_RegisterDevice(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := broker.NewBrokerHandler(tt.db, tt.ocrClient)
+			b := broker.NewBrokerHandler(tt.db, tt.ocrClient, 80)
 			b.RegisterDevice(nil, tt.msg)
 		})
 	}
