@@ -19,6 +19,7 @@ func InitRoutes(db *pgxpool.Pool, mqttClient mqtt.Client) http.Handler {
 	InitPhotoRoutes(db, mux)
 	InitDeviceRoutes(db, mqttClient, mux)
 
+    mux.Handle("/api/reports", withAuth(http.HandlerFunc(GenerateReportHandler(db))))
 	// Serve static files from ./uploads
 	fs := http.FileServer(http.Dir("uploads"))
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
