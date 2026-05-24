@@ -8,11 +8,11 @@ Utilizare:
     python3 upload_folder.py /path/to/folder --device-id medical-scanner-1
 """
 
-# TODO: Implement mTLS security - See docs/SECURITY_IMPLEMENTATION.md
 import time
 import os
 import socket
 import json
+import ssl
 import paho.mqtt.client as mqtt
 import sys
 import argparse
@@ -20,7 +20,7 @@ from pathlib import Path
 
 # Configuration
 BROKER = "127.0.0.1"
-PORT = 1883  # Plain MQTT (use 8883 for mTLS)
+PORT = 8883  # MQTT with mTLS
 
 # Default device info
 DEFAULT_DEVICE_ID = "folder-uploader"
@@ -32,6 +32,10 @@ SUPPORTED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.PNG', '.JPG', '.JPEG'}
 # Get absolute paths
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+SECRETS_DIR = os.path.join(PROJECT_ROOT, "secrets")
+CA_CRT = os.path.join(SECRETS_DIR, "ca.crt")
+CLIENT_CRT = os.path.join(SECRETS_DIR, "folder-uploader.crt")
+CLIENT_KEY = os.path.join(SECRETS_DIR, "folder-uploader.key")
 
 class ImageUploader:
     def __init__(self, device_id, device_name):
@@ -138,10 +142,9 @@ class ImageUploader:
         client.on_connect = self.on_connect
         client.on_publish = self.on_publish
         
-        # TODO: For mTLS, uncomment and configure:
-        # client.tls_set(ca_certs=CA_CRT, certfile=CLIENT_CRT, keyfile=CLIENT_KEY, 
-        #               tls_version=ssl.PROTOCOL_TLSv1_2)
-        # client.tls_insecure_set(True)
+        # Configure mTLS
+        client.tls_set(ca_certs=CA_CRT, certfile=CLIENT_CRT, keyfile=CLIENT_KEY,
+                       tls_version=ssl.PROTOCOL_TLSv1_2)
         
         try:
             client.connect(BROKER, PORT, 60)

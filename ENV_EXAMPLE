@@ -15,6 +15,7 @@ ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
 # MQTT host IP (used by clients to connect to the broker)
 HOST_IP=host.docker.internal
+MQTT_TLS_PORT=8883
 
 # AWS S3 (optional — only needed if using S3 for photo storage)
 AWS_ACCESS_KEY=your-aws-access-key

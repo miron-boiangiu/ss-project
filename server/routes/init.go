@@ -57,7 +57,10 @@ func handleBrokerInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ip := getOutboundIP()
-	port := "1883"
+	port := os.Getenv("MQTT_TLS_PORT")
+	if port == "" {
+		port = "8883"
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{

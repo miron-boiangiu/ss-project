@@ -2,3 +2,5 @@
 uploads
 client/yarn.lock
 .dev-runtime
+secrets/
+__pycache__/
