@@ -212,8 +212,7 @@ const DevicesPage: React.FC = () => {
       </div>
 
       {/* Devices grid with fixed height and scroll */}
-      <div className="bg-gray-50 p-4 rounded-lg shadow-sm overflow-y-auto max-h-[60vh]">
-        {/* Loading state */}
+<div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-sm overflow-y-auto max-h-[60vh]">        {/* Loading state */}
         {loading && (
           <div className="flex justify-center items-center h-40">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-sky-500"></div>

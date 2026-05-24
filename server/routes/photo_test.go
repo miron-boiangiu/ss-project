@@ -71,7 +71,6 @@ func TestPhotoController_GetPhotos(t *testing.T) {
 	}
 }
 
-
 func TestPhotoController_GetPhotos_MethodNotAllowed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -79,7 +78,7 @@ func TestPhotoController_GetPhotos_MethodNotAllowed(t *testing.T) {
 	mockRepo := mock_domain.NewMockPhotoRepository(ctrl)
 	ctlr := routes.PhotoController{PhotoRepository: mockRepo}
 
-	req := httptest.NewRequest(http.MethodPost, "/photos", nil) // Using POST instead of GET
+	req := httptest.NewRequest(http.MethodPost, "/photos", nil)
 	rr := httptest.NewRecorder()
 
 	ctlr.GetPhotos(rr, req)
@@ -109,5 +108,134 @@ func TestPhotoController_GetPhotos_InvalidTimestamp(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "Invalid start timestamp") && !strings.Contains(rr.Body.String(), "Invalid end timestamp") {
 		t.Errorf("expected body to contain 'Invalid start timestamp' or 'Invalid end timestamp', got %q", rr.Body.String())
+	}
+}
+
+func TestPhotoController_DeletePhoto(t *testing.T) {
+	tests := []struct {
+		name             string
+		userEmail        string
+		userRole         string
+		mockPhoto        *domain.Photo
+		mockGetError     error
+		mockDeleteError  error
+		expectedStatus   int
+		expectedContains string
+	}{
+		{
+			name:             "unauthorized access",
+			userEmail:        "user@example.com",
+			userRole:         "user",
+			expectedStatus:   http.StatusUnauthorized,
+			expectedContains: "Unauthorized",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockRepo := mock_domain.NewMockPhotoRepository(ctrl)
+			ctlr := routes.PhotoController{PhotoRepository: mockRepo}
+
+			req := httptest.NewRequest(http.MethodDelete, "/photos/photo-1", nil)
+			ctx := context.WithValue(req.Context(), "email", tt.userEmail)
+			ctx = context.WithValue(ctx, "role", tt.userRole)
+			req = req.WithContext(ctx)
+			rr := httptest.NewRecorder()
+
+			ctlr.DeletePhoto(rr, req)
+
+			if rr.Code != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, rr.Code)
+			}
+			if tt.expectedContains != "" && !strings.Contains(rr.Body.String(), tt.expectedContains) {
+				t.Errorf("expected body to contain %q, got %q", tt.expectedContains, rr.Body.String())
+			}
+		})
+	}
+}
+
+func TestPhotoController_DeletePhoto_MethodNotAllowed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mock_domain.NewMockPhotoRepository(ctrl)
+	ctlr := routes.PhotoController{PhotoRepository: mockRepo}
+
+	req := httptest.NewRequest(http.MethodGet, "/photos/photo-1", nil)
+	rr := httptest.NewRecorder()
+
+	ctlr.DeletePhoto(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Method not allowed") {
+		t.Errorf("expected body to contain 'Method not allowed', got %q", rr.Body.String())
+	}
+}
+
+func TestPhotoController_DeleteAllPhotos(t *testing.T) {
+	tests := []struct {
+		name             string
+		userEmail        string
+		userRole         string
+		expectedStatus   int
+		expectedContains string
+	}{
+		{
+			name:             "unauthorized access",
+			userEmail:        "user@example.com",
+			userRole:         "user",
+			expectedStatus:   http.StatusUnauthorized,
+			expectedContains: "Unauthorized",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockRepo := mock_domain.NewMockPhotoRepository(ctrl)
+			ctlr := routes.PhotoController{PhotoRepository: mockRepo}
+
+			req := httptest.NewRequest(http.MethodDelete, "/photos/all", nil)
+			ctx := context.WithValue(req.Context(), "email", tt.userEmail)
+			ctx = context.WithValue(ctx, "role", tt.userRole)
+			req = req.WithContext(ctx)
+			rr := httptest.NewRecorder()
+
+			ctlr.DeleteAllPhotos(rr, req)
+
+			if rr.Code != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, rr.Code)
+			}
+			if tt.expectedContains != "" && !strings.Contains(rr.Body.String(), tt.expectedContains) {
+				t.Errorf("expected body to contain %q, got %q", tt.expectedContains, rr.Body.String())
+			}
+		})
+	}
+}
+
+func TestPhotoController_DeleteAllPhotos_MethodNotAllowed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mock_domain.NewMockPhotoRepository(ctrl)
+	ctlr := routes.PhotoController{PhotoRepository: mockRepo}
+
+	req := httptest.NewRequest(http.MethodGet, "/photos/all", nil)
+	rr := httptest.NewRecorder()
+
+	ctlr.DeleteAllPhotos(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Method not allowed") {
+		t.Errorf("expected body to contain 'Method not allowed', got %q", rr.Body.String())
 	}
 }

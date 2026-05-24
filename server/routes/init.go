@@ -13,12 +13,31 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const (
+	roleUser  = "user"
+	roleAdmin = "admin"
+)
+
+func requireRole(r *http.Request, roles ...string) bool {
+	role, ok := r.Context().Value("role").(string)
+	if !ok {
+		return false
+	}
+	for _, allowed := range roles {
+		if role == allowed {
+			return true
+		}
+	}
+	return false
+}
+
 func InitRoutes(db *pgxpool.Pool, mqttClient mqtt.Client) http.Handler {
 	mux := http.NewServeMux()
 	InitUserRoutes(db, mux)
 	InitPhotoRoutes(db, mux)
 	InitDeviceRoutes(db, mqttClient, mux)
 
+    mux.Handle("/api/reports", withAuth(http.HandlerFunc(GenerateReportHandler(db))))
 	// Serve static files from ./uploads
 	fs := http.FileServer(http.Dir("uploads"))
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", fs))

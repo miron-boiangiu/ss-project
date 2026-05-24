@@ -154,6 +154,9 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 		photo.NeedsReview = medicalData.NeedsReview
 		photo.OverallConfidence = medicalData.OverallConfidence
 		photo.FieldConfidences = medicalData.FieldConfidences
+
+		photo.DocumentType = medicalData.DocumentType
+		photo.SchemaVersion = medicalData.SchemaVersion
 	}
 
 	err = b.photoRepository.Save(ctx, photo)
