@@ -515,10 +515,7 @@ const PhotosPage: React.FC = () => {
                 {(photos || []).map(photo => (
                   <PhotoCard
                     key={photo.id}
-                    photoId={photo.id}
-                    imageUrl={photo.presigned_url}
-                    extractedText={photo.text}
-                    altText={`Photo from ${new Date(photo.timestamp).toLocaleDateString()}`}
+                    photo={photo}
                     isAdmin={isAdmin}
                     onDelete={handleDeletePhoto}
                   />
