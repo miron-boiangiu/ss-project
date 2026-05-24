@@ -8,17 +8,47 @@ services:
     env_file: .env
     environment:
       - MQTT_HOST_IP=${HOST_IP:-host.docker.internal}
+      - OCR_SERVICE_URL=http://ocr-service:9090
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - postgres
-      - broker
+      postgres:
+        condition: service_healthy
+      broker:
+        condition: service_started
+      ocr-service:
+        condition: service_started
     ports:
       - 8080:8080
     volumes:
       - ./uploads:/app/uploads
     networks:
       - backend
+      - ocr-net
+
+  # Sandboxed OCR engine. Lives in a distroless container with no shell, no
+  # package manager, no secrets, and on a Docker network (`ocr-net`) that is
+  # marked `internal: true` so it cannot reach the public internet, the
+  # database, or the MQTT broker. The API talks to it only by HTTP.
+  ocr-service:
+    build: ./ocr-service
+    image: ss-ocr-service:latest
+    container_name: ocr-service
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.5
+    restart: unless-stopped
+    networks:
+      - ocr-net
+    # No `ports:` block — the service is only reachable from inside ocr-net.
 
   broker:
     user: "${UID}:${GID}"
@@ -43,9 +73,20 @@ services:
       - ./migrations:/docker-entrypoint-initdb.d
     networks:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
 
 volumes:
   postgres-data:
 
 networks:
   backend:
+  # Isolated network for OCR traffic. `internal: true` blocks any egress
+  # to the host's external networks — the OCR container can only talk to
+  # other members of this network (i.e. go-api).
+  ocr-net:
+    internal: true

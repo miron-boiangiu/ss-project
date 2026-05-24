@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -16,23 +17,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
- 
-      # Go backend
-      - name: Install system dependencies (tesseract + leptonica)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libtesseract-dev libleptonica-dev tesseract-ocr
 
+      # ── Go backend ─────────────────────────────────────────────
+      # The API server no longer links libtesseract — OCR runs in the
+      # sandboxed ocr-service container — so no system OCR libs are needed
+      # for `go build` / `go test` of the server module.
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.24"
 
-      - name: Go build
+      - name: Go build (server)
         working-directory: server
-        run: go build ./...
+        run: CGO_ENABLED=0 go build ./...
 
-      - name: Go test
+      - name: Go test (server)
         working-directory: server
         run: go test ./... -v -coverprofile=coverage.out 2>&1 | tee test-results.txt
 
@@ -49,8 +48,8 @@ jobs:
         with:
           name: go-coverage
           path: server/coverage.out
- 
-      # React/Vite frontend
+
+      # ── React/Vite frontend ────────────────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -69,9 +68,43 @@ jobs:
       - name: Client build
         working-directory: client
         run: yarn build
- 
-      # Docker build
-      - name: Docker build API image
-        working-directory: server
-        run: docker build -t ss-web-api:test .
 
+      # ── Sandbox verification ───────────────────────────────────
+      # Builds both Dockerfiles, boots the stack, runs the verification
+      # script that enforces the hardening contract (distroless, no caps,
+      # read-only FS, network isolation, no exposed ports). Fails the build
+      # if any sandbox guarantee regresses.
+      - name: Prepare .env for compose
+        run: |
+          cp ENV_EXAMPLE .env
+          sed -i "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$(openssl rand -hex 32)|" .env
+          sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 32)|" .env
+          {
+            echo "UID=$(id -u)"
+            echo "GID=$(id -g)"
+          } >> .env
+
+      - name: Build images (go-api + ocr-service)
+        run: docker compose build
+
+      - name: Start stack
+        run: docker compose up -d --wait --wait-timeout 120
+
+      - name: Verify sandbox configuration
+        run: ./scripts/verify-sandbox.sh
+
+      - name: Dump container state on failure
+        if: failure()
+        run: |
+          echo "── docker compose ps ──"
+          docker compose ps
+          echo "── go-api logs ──"
+          docker compose logs --no-color --tail=200 go-api || true
+          echo "── ocr-service logs ──"
+          docker compose logs --no-color --tail=200 ocr-service || true
+          echo "── postgres logs ──"
+          docker compose logs --no-color --tail=100 postgres || true
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v --remove-orphans
