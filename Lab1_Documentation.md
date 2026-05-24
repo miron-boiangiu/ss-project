@@ -27,7 +27,7 @@ ss-web/
 |-----------|------------|
 | Frontend | React + TypeScript + Vite + TailwindCSS |
 | Backend | Go (Golang) |
-| Bază de date | MongoDB |
+| Bază de date | PostgreSQL |
 | Broker MQTT | Eclipse Mosquitto |
 | Containerizare | Docker Compose |
 | Autentificare | JWT - TODO: de implementat (vezi `docs/AUTH_IMPLEMENTATION.md`) |
@@ -61,8 +61,8 @@ Verifică/creează fișierul `.env` în directorul rădăcină:
 # .env
 UID=501                               # User ID local (obține cu `id -u`)
 GID=20                                # Group ID local (obține cu `id -g`)
-MONGO_INITDB_ROOT_USERNAME=admin      # Username MongoDB
-MONGO_INITDB_ROOT_PASSWORD=supersecret # Parolă MongoDB
+POSTGRES_USER=admin      # Username PostgreSQL
+POSTGRES_PASSWORD=supersecret # Parolă PostgreSQL
 JWT_SECRET=dev-secret                 # Secret pentru JWT
 AWS_ACCESS_KEY=local-aws-access       # Opțional: pentru S3
 AWS_SECRET_KEY=local-aws-secret       # Opțional: pentru S3
@@ -81,7 +81,7 @@ MQTT_HOST_IP=192.168.1.95             # IP-ul host-ului pentru MQTT
 
 Acest script va:
 1. Instala dependențele client (yarn install)
-2. Porni containerele Docker (API, MongoDB, MQTT Broker)
+2. Porni containerele Docker (API, PostgreSQL, MQTT Broker)
 3. Porni serverul de development Vite
 
 **Metoda 2: Manual**
@@ -104,7 +104,7 @@ După pornire, aplicația va fi disponibilă la:
 |----------|----------|
 | Frontend (Vite) | http://localhost:5173 |
 | Backend API | http://localhost:8080 |
-| MongoDB | localhost:27019 |
+| PostgreSQL | localhost:5432 |
 | MQTT Broker (mTLS) | localhost:8883 |
 | MQTT Broker (plain) | localhost:1883 |
 
@@ -170,7 +170,7 @@ docker compose down
 docker ps
 docker logs go-api
 docker logs broker
-docker logs mongo-db
+docker logs postgres
 ```
 
 ### Verificare conectivitate MQTT

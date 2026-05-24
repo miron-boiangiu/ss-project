@@ -73,13 +73,10 @@ Role: "user",
 
 ## How to Promote a User to Admin
 
-Since there is no promotion API endpoint, insert/update the role directly in MongoDB:
+Since there is no promotion API endpoint, update the role directly in PostgreSQL:
 
-```js
-db.users.updateOne(
-    { email: "user@example.com" },
-    { $set: { role: "admin" } }
-)
+```sql
+UPDATE users SET role = 'admin' WHERE email = 'user@example.com';
 ```
 
 ## Frontend
