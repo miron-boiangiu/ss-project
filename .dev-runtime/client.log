@@ -1,7 +1,0 @@
-yarn run v1.22.22
-$ CHOKIDAR_USEPOLLING=true vite --host 127.0.0.1 --port 5173
-1:51:37 PM [vite] (client) Re-optimizing dependencies because lockfile has changed
-
-  VITE v6.3.5  ready in 226 ms
-
-  ➜  Local:   http://127.0.0.1:5173/
