@@ -27,7 +27,7 @@ const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 bg-sky-50 shadow-sm z-50">
+    <nav className="fixed top-0 left-0 right-0 bg-sky-50 dark:bg-gray-900 shadow-sm dark:border-b dark:border-gray-700 z-50 transition-colors duration-300">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex space-x-2">
           {leftButtons.map((button, index) => (
@@ -42,7 +42,7 @@ const Navbar: React.FC<NavbarProps> = ({
         </div>
         
         <h1 
-          className="text-xl font-semibold text-sky-700 cursor-pointer hover:text-sky-800 transition-colors"
+          className="text-xl font-semibold text-sky-700 dark:text-sky-300 cursor-pointer hover:text-sky-800 dark:hover:text-sky-200 transition-colors"
           onClick={handleTitleClick}
         >
           {title}
@@ -64,4 +64,4 @@ const Navbar: React.FC<NavbarProps> = ({
   );
 };
 
-export default Navbar; 
+export default Navbar;

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mqtt-streaming-server/domain"
 	"mqtt-streaming-server/repository"
@@ -21,7 +21,7 @@ type PhotoController struct {
 	PhotoRepository domain.PhotoRepository
 }
 
-func InitPhotoRoutes(db *mongo.Database, mux *http.ServeMux) {
+func InitPhotoRoutes(db *pgxpool.Pool, mux *http.ServeMux) {
 	photoController := &PhotoController{
 		PhotoRepository: repository.NewPhotoRepository(db),
 	}
@@ -65,17 +65,12 @@ func (ctlr PhotoController) GetPhotos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filters := map[string]any{
-		"timestamp": map[string]any{
-			"$gte": time.Unix(startInt, 0),
-			"$lte": time.Unix(endInt, 0),
-		},
+		"timestamp_gte": time.Unix(startInt, 0),
+		"timestamp_lte": time.Unix(endInt, 0),
 	}
 
 	if text != "" {
-		filters["text"] = map[string]any{
-			"$regex":   text,
-			"$options": "i",
-		}
+		filters["text"] = text
 	}
 
 	if deviceID != "" {
@@ -139,7 +134,6 @@ func (ctlr PhotoController) DeletePhoto(w http.ResponseWriter, r *http.Request) 
 	fileName := fmt.Sprintf("uploads/photos/%d.%s", photo.Timestamp.Unix(), photo.ImageType)
 	if err := os.Remove(fileName); err != nil {
 		fmt.Printf("Warning: Could not delete file %s: %v\n", fileName, err)
-		// Don't fail the request - the DB record is already deleted
 	}
 
 	w.WriteHeader(http.StatusOK)

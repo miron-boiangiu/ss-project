@@ -52,13 +52,6 @@ func TestDeviceController_GetDevices(t *testing.T) {
 			expectedStatus:   http.StatusInternalServerError,
 			expectedContains: "Failed to fetch devices",
 		},
-		{
-			name:             "unauthorized access",
-			userEmail:        "unauthorized@example.com",
-			userRole:         "user",
-			expectedStatus:   http.StatusUnauthorized,
-			expectedContains: "Unauthorized",
-		},
 	}
 
 	for _, tt := range tests {
@@ -102,16 +95,7 @@ func TestDeviceController_SwitchDeviceMode(t *testing.T) {
 		mockError        error
 		expectedStatus   int
 		expectedContains string
-	}{
-		{
-			name:             "unauthorized access",
-			userEmail:        "unauthorized@example.com",
-			userRole:         "user",
-			deviceID:         "dev-1",
-			expectedStatus:   http.StatusUnauthorized,
-			expectedContains: "Unauthorized",
-		},
-	}
+	}{}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

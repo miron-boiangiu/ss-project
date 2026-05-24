@@ -47,7 +47,7 @@ const RegisterPage: React.FC = () => {
 
   return (
     <div className="flex justify-center items-center min-h-[80vh]">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+      <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md w-full max-w-md">
         <h2 className="text-2xl font-semibold text-sky-700 mb-6 text-center">Register</h2>
         
         {error && (
@@ -64,7 +64,7 @@ const RegisterPage: React.FC = () => {
         
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="email" className="block text-sm font-medium text-sky-700 mb-1">
               Email Address
             </label>
             <input
@@ -79,7 +79,7 @@ const RegisterPage: React.FC = () => {
           </div>
           
           <div className="mb-6">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-sky-700 mb-1">
               Password
             </label>
             <input

@@ -6,8 +6,16 @@ import (
 	"time"
 )
 
+// schemaVersion is the semver of the JSON Schema (server/schema/medical-data.v1.json)
+// that MedicalData payloads conform to. Bump when the schema changes shape.
+const schemaVersion = "1.0.0"
+
 // MedicalData reprezinta datele structurate extrase din fisa de aptitudine medicala
 type MedicalData struct {
+	// Schema identification (PR 2, task 2.B)
+	DocumentType  string `json:"document_type" bson:"document_type"`   // document class discriminator, e.g. "fisa_aptitudine"
+	SchemaVersion string `json:"schema_version" bson:"schema_version"` // semver of the JSON Schema this payload conforms to
+
 	// Header - Unitatea Medicala
 	UnitateMedicala        string `json:"unitate_medicala" bson:"unitate_medicala"`                 // UNITATEA MEDICALA
 	AdresaUnitateMedicala  string `json:"adresa_unitate_medicala" bson:"adresa_unitate_medicala"`   // ADRESA (sus)
@@ -48,22 +56,62 @@ type MedicalData struct {
 	Recomandari      string    `json:"recomandari" bson:"recomandari"`               // RECOMANDARI field
 	Data             time.Time `json:"data" bson:"data"`                             // Data
 	DataUrmExaminari time.Time `json:"data_urm_examinari" bson:"data_urm_examinari"` // Data urmatoarei examinari
+
+	// Confidence & review (PR 1, task 2.B)
+	NeedsReview       bool               `json:"needs_review" bson:"needs_review"`             // flagged for manual review (set by the broker against the threshold)
+	OverallConfidence float64            `json:"overall_confidence" bson:"overall_confidence"` // min over all populated FieldConfidences entries, 0–100
+	FieldConfidences  map[string]float64 `json:"field_confidences" bson:"field_confidences"`   // per-field confidence, keyed by snake_case field name
 }
 
 // ParseMedicalCertificate extrage datele structurate din textul OCR al unei fise de aptitudine medicala romanesti
-func ParseMedicalCertificate(ocrText string) *MedicalData {
+func ParseMedicalCertificate(ocrText string, words []WordBox) *MedicalData {
 	if ocrText == "" || ocrText == "OCR failed" {
 		return nil
 	}
 
-	data := &MedicalData{}
+	data := &MedicalData{
+		// The broker guards this call with IsMedicalCertificate, so a non-nil
+		// return implies the document is an aptitude form. Stamp the schema
+		// identifiers unconditionally; future document classes will pick a
+		// different DocumentType.
+		DocumentType:     "fisa_aptitudine",
+		SchemaVersion:    schemaVersion,
+		FieldConfidences: make(map[string]float64),
+	}
+
+	// extract runs a single-capture-group regex over text — a slice of the
+	// joined OCR text that begins at byte offset base within the global text —
+	// records the field's confidence under key, and returns the trimmed value.
+	// Translating the match indices by base keeps the confidence lookup correct
+	// across the topPart/bottomPart split below. A confidence of 0 (the span
+	// overlaps only zero-confidence words) is treated as "not extracted" and
+	// produces no entry at all.
+	extract := func(text, pattern, key string, base int) string {
+		val, s, e := extractField(text, pattern)
+		if val != "" {
+			if c := minConfidence(words, base+s, base+e); c > 0 {
+				data.FieldConfidences[key] = c
+			}
+		}
+		return val
+	}
+	// extractMulti is extract for fields that may span more than one line.
+	extractMulti := func(text, pattern, key string, base int) string {
+		val, s, e := extractMultilineField(text, pattern)
+		if val != "" {
+			if c := minConfidence(words, base+s, base+e); c > 0 {
+				data.FieldConfidences[key] = c
+			}
+		}
+		return val
+	}
 
 	// --- Header Section (Unitatea Medicala) ---
 	// UNITATEA MEDICALA
-	data.UnitateMedicala = extractField(ocrText, `UNITATEA\s+MEDICALA:\s*([^\n]+)`)
+	data.UnitateMedicala = extract(ocrText, `UNITATEA\s+MEDICALA:\s*([^\n]+)`, "unitate_medicala", 0)
 	if data.UnitateMedicala == "" {
 		// Fallback for messy OCR
-		data.UnitateMedicala = extractField(ocrText, `MEDICALA:\s*([^\n]+)`)
+		data.UnitateMedicala = extract(ocrText, `MEDICALA:\s*([^\n]+)`, "unitate_medicala", 0)
 	}
 
 	// Because "Adresa" appears twice, we try to capture the first occurrence for the Medical Unit
@@ -72,46 +120,51 @@ func ParseMedicalCertificate(ocrText string) *MedicalData {
 	parts := strings.Split(ocrText, "Societate")
 	topPart := parts[0]
 	bottomPart := ocrText
+	// topPart is a prefix of ocrText (base 0); bottomPart equals
+	// ocrText[bottomBase : bottomBase+len(bottomPart)], so bottomBase translates
+	// a bottomPart-relative match index back to a global word offset.
+	bottomBase := 0
 	if len(parts) > 1 {
 		bottomPart = "Societate" + parts[1] // Include "Societate" back for regex matching
+		bottomBase = strings.Index(ocrText, "Societate")
 	}
 
 	// Adresa Unitate Medicala (from top part)
-	data.AdresaUnitateMedicala = extractField(topPart, `ADRESA:\s*([^\n]+)`)
+	data.AdresaUnitateMedicala = extract(topPart, `ADRESA:\s*([^\n]+)`, "adresa_unitate_medicala", 0)
 
 	// Telefon Unitate Medicala (from top part)
-	data.TelefonUnitateMedicala = extractField(topPart, `TEL:\s*([^\n]+)`)
+	data.TelefonUnitateMedicala = extract(topPart, `TEL:\s*([^\n]+)`, "telefon_unitate_medicala", 0)
 
 	// Numar Fisa
-	data.NumarFisa = extractField(ocrText, `FISA\s+DE\s+APTITUDINE\s+NR\.?\s*(\d+)`)
+	data.NumarFisa = extract(ocrText, `FISA\s+DE\s+APTITUDINE\s+NR\.?\s*(\d+)`, "numar_fisa", 0)
 
 	// --- Employer Section (Societate, unitate) ---
-	data.NumarFisa = extractField(ocrText, `(?i)FISA\s+DE\s+APTITUDINE\s+NR[\.:]?\s*(\d+)`)
+	data.NumarFisa = extract(ocrText, `(?i)FISA\s+DE\s+APTITUDINE\s+NR[\.:]?\s*(\d+)`, "numar_fisa", 0)
 
 	// --- Employer Section (from bottom part) ---
 	// Societate, unitate, etc.
-	data.SocietateUnitate = extractMultilineField(bottomPart, `(?i)Soci[ec]tate,?\s*unitate,?\s*(?:etc[\.:]?)?\s*([^\n]+(?:\n[^\n]+)?)`)
+	data.SocietateUnitate = extractMulti(bottomPart, `(?i)Soci[ec]tate,?\s*unitate,?\s*(?:etc[\.:]?)?\s*([^\n]+(?:\n[^\n]+)?)`, "societate_unitate", bottomBase)
 	// Try explicit university match if above failed or just as fallback
 	if data.SocietateUnitate == "" {
-		data.SocietateUnitate = extractField(bottomPart, `(?i)(UNIVERSITATEA\s+(?:NATIONALA\s+DE\s+STIINTA\s+SI\s+TEHNOLOGIE\s+)?POLITEHNICA\s+(?:DIN\s+)?[A-Z]+)`)
+		data.SocietateUnitate = extract(bottomPart, `(?i)(UNIVERSITATEA\s+(?:NATIONALA\s+DE\s+STIINTA\s+SI\s+TEHNOLOGIE\s+)?POLITEHNICA\s+(?:DIN\s+)?[A-Z]+)`, "societate_unitate", bottomBase)
 	}
 
 	// Adresa Angajator
 	// Note: In bottom part, ADRESA appears again.
-	data.AdresaAngajator = extractField(bottomPart, `(?i)Adresa[:;]?\s*([^\n]+)`)
+	data.AdresaAngajator = extract(bottomPart, `(?i)Adresa[:;]?\s*([^\n]+)`, "adresa_angajator", bottomBase)
 
 	// Telefon/Fax Angajator
-	data.TelefonAngajator = extractField(bottomPart, `(?i)(?:Telefon|Fax)[:;]?\s*([^\n]+)`)
+	data.TelefonAngajator = extract(bottomPart, `(?i)(?:Telefon|Fax)[:;]?\s*([^\n]+)`, "telefon_angajator", bottomBase)
 
 	// --- Personal Data ---
-	data.Nume = extractField(ocrText, `(?i)NUME[:;]?\s*([A-Za-z\s]+)`)
-	data.Prenume = extractField(ocrText, `(?i)PRENUME[:;]?\s*([A-Za-z\s]+)`)
-	data.CNP = extractField(ocrText, `(?i)CNP[:;]?\s*(\d+)`)
+	data.Nume = extract(ocrText, `(?i)NUME[:;]?\s*([A-Za-z\s]+)`, "nume", 0)
+	data.Prenume = extract(ocrText, `(?i)PRENUME[:;]?\s*([A-Za-z\s]+)`, "prenume", 0)
+	data.CNP = extract(ocrText, `(?i)CNP[:;]?\s*(\d+)`, "cnp", 0)
 
 	// --- Professional Data ---
-	data.ProfesieFunctie = extractField(ocrText, `(?i)Profesie\s*[\/\|]\s*functie[:;]?\s*([^\n]+)`)
+	data.ProfesieFunctie = extract(ocrText, `(?i)Profesie\s*[\/\|]\s*functie[:;]?\s*([^\n]+)`, "profesie_functie", 0)
 	
-	data.LocDeMunca = extractField(ocrText, `(?i)Locul?\s+de\s+munca[:;]?\s*([^\n]+)`)
+	data.LocDeMunca = extract(ocrText, `(?i)Locul?\s+de\s+munca[:;]?\s*([^\n]+)`, "loc_de_munca", 0)
 
 	// --- Medical Data ---
 	// --- Medical Data ---
@@ -347,7 +400,7 @@ func ParseMedicalCertificate(ocrText string) *MedicalData {
 	// Dates
 	// Data: ... (usually left bottom)
 	// Relaxed regex for date (allows space around / or -)
-	dateStr := extractField(bottomPart, `(?i)Data[:;]?\s*(\d{2}[\.\/\-]\d{2}[\.\/\-]\d{4})`)
+	dateStr := extract(bottomPart, `(?i)Data[:;]?\s*(\d{2}[\.\/\-]\d{2}[\.\/\-]\d{4})`, "data", bottomBase)
 	if dateStr != "" {
 		// Replace . or - with / for parsing
 		normalizedDate := strings.ReplaceAll(dateStr, ".", "/")
@@ -358,7 +411,7 @@ func ParseMedicalCertificate(ocrText string) *MedicalData {
 	}
 
 	// Data urmatoarei examinari
-	nextDateStr := extractField(bottomPart, `(?i)Data\s+urmatoarei\s+examinari[:;]?\s*(\d{2}[\.\/\-]\d{2}[\.\/\-]\d{4})`)
+	nextDateStr := extract(bottomPart, `(?i)Data\s+urmatoarei\s+examinari[:;]?\s*(\d{2}[\.\/\-]\d{2}[\.\/\-]\d{4})`, "data_urm_examinari", bottomBase)
 	if nextDateStr != "" {
 		normalizedDate := strings.ReplaceAll(nextDateStr, ".", "/")
 		normalizedDate = strings.ReplaceAll(normalizedDate, "-", "/")
@@ -367,31 +420,39 @@ func ParseMedicalCertificate(ocrText string) *MedicalData {
 		}
 	}
 	
+	// Overall confidence: min over every populated field confidence (0 if none).
+	data.OverallConfidence = overallConfidence(data.FieldConfidences)
+
 	return data
 }
 
-// extractField extrage un camp folosind un pattern regex
-func extractField(text, pattern string) string {
+// extractField extrage un camp folosind un pattern regex.
+// Returneaza valoarea (grupul 1, fara spatii la capete) impreuna cu offsetul
+// de octeti [start, end) al grupului in textul primit, folosit pentru a calcula
+// increderea per camp. Daca regexul nu se potriveste, start si end sunt 0.
+func extractField(text, pattern string) (value string, start, end int) {
 	re := regexp.MustCompile(pattern)
-	matches := re.FindStringSubmatch(text)
-	if len(matches) > 1 {
-		return strings.TrimSpace(matches[1])
+	loc := re.FindStringSubmatchIndex(text)
+	if loc == nil || len(loc) < 4 || loc[2] < 0 {
+		return "", 0, 0
 	}
-	return ""
+	return strings.TrimSpace(text[loc[2]:loc[3]]), loc[2], loc[3]
 }
 
-// extractMultilineField extrage campuri care pot fi pe mai multe linii
-func extractMultilineField(text, pattern string) string {
+// extractMultilineField extrage campuri care pot fi pe mai multe linii.
+// Ca si extractField, returneaza si offsetul de octeti [start, end) al grupului
+// brut in textul primit (inainte de curatarea spatiilor din valoare).
+func extractMultilineField(text, pattern string) (value string, start, end int) {
 	re := regexp.MustCompile(pattern)
-	matches := re.FindStringSubmatch(text)
-	if len(matches) > 1 {
-		// Curata rezultatul
-		result := strings.TrimSpace(matches[1])
-		// Inlocuieste spatii multiple cu un singur spatiu
-		result = regexp.MustCompile(`\s+`).ReplaceAllString(result, " ")
-		return result
+	loc := re.FindStringSubmatchIndex(text)
+	if loc == nil || len(loc) < 4 || loc[2] < 0 {
+		return "", 0, 0
 	}
-	return ""
+	// Curata rezultatul
+	result := strings.TrimSpace(text[loc[2]:loc[3]])
+	// Inlocuieste spatii multiple cu un singur spatiu
+	result = regexp.MustCompile(`\s+`).ReplaceAllString(result, " ")
+	return result, loc[2], loc[3]
 }
 
 // containsChecked verifica daca un camp are X (este bifat)

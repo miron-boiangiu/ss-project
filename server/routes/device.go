@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"go.mongodb.org/mongo-driver/mongo"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mqtt-streaming-server/domain"
 	"mqtt-streaming-server/repository"
@@ -17,7 +17,7 @@ type DeviceController struct {
 	mqttClient       mqtt.Client
 }
 
-func InitDeviceRoutes(db *mongo.Database, mqttClient mqtt.Client, mux *http.ServeMux) {
+func InitDeviceRoutes(db *pgxpool.Pool, mqttClient mqtt.Client, mux *http.ServeMux) {
 	deviceController := &DeviceController{
 		DeviceRepository: repository.NewDeviceRepository(db),
 		mqttClient:       mqttClient,
@@ -101,7 +101,6 @@ func (ctlr DeviceController) SendCommand(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Validate command
 	validCommands := map[string]bool{
 		"CAPTURE":    true,
 		"START-LIVE": true,
@@ -112,7 +111,6 @@ func (ctlr DeviceController) SendCommand(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Publish command to MQTT topic ssproject/commands
 	topic := "ssproject/commands"
 	payload := request.Command
 	if token := ctlr.mqttClient.Publish(topic, 0, false, payload); token.Wait() && token.Error() != nil {

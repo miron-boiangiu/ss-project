@@ -15,12 +15,12 @@ import {
     Cell,
 } from 'recharts';
 
-// Interface for photo data, including the new boolean fields
+// Interface for photo data
 interface Photo {
     id: string;
     timestamp: string;
 
-    // Boolean fields from backend
+    // Control type booleans
     control_angajare?: boolean;
     control_periodic?: boolean;
     control_adaptare?: boolean;
@@ -28,10 +28,8 @@ interface Photo {
     control_supraveghere?: boolean;
     control_alte?: boolean;
 
-    aviz_apt?: boolean;
-    aviz_apt_conditionat?: boolean;
-    aviz_inapt_temporar?: boolean;
-    aviz_inapt?: boolean;
+    // Medical opinion (exclusive: "APT", "APT CONDITIONAT", "INAPT TEMPORAR", "INAPT")
+    aviz_medical?: string;
 }
 
 const StatisticsPage: React.FC = () => {
@@ -121,10 +119,11 @@ const StatisticsPage: React.FC = () => {
         };
 
         photos.forEach(photo => {
-            if (photo.aviz_apt) stats['APT']++;
-            if (photo.aviz_apt_conditionat) stats['APT Conditionat']++;
-            if (photo.aviz_inapt_temporar) stats['Inapt Temporar']++;
-            if (photo.aviz_inapt) stats['Inapt']++;
+            const aviz = (photo.aviz_medical || '').toUpperCase();
+            if (aviz === 'APT') stats['APT']++;
+            else if (aviz === 'APT CONDITIONAT') stats['APT Conditionat']++;
+            else if (aviz === 'INAPT TEMPORAR') stats['Inapt Temporar']++;
+            else if (aviz === 'INAPT') stats['Inapt']++;
         });
 
         return Object.entries(stats).map(([name, value]) => ({ name, value }));
@@ -136,17 +135,17 @@ const StatisticsPage: React.FC = () => {
     const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
     const renderChartToggle = (currentType: 'bar' | 'pie', setType: (t: 'bar' | 'pie') => void) => (
-        <div className="flex bg-gray-100 p-1 rounded-md">
+        <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-md">
             <button
                 onClick={() => setType('bar')}
-                className={`px-3 py-1 text-sm rounded-sm transition-colors ${currentType === 'bar' ? 'bg-white shadow-sm text-sky-600 font-medium' : 'text-gray-500 hover:text-gray-700'
+                className={`px-3 py-1 text-sm rounded-sm transition-colors ${currentType === 'bar' ? 'bg-white shadow-sm text-sky-600 dark:bg-gray-600 dark:text-sky-400 font-medium' : 'text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white'
                     }`}
             >
                 Bar
             </button>
             <button
                 onClick={() => setType('pie')}
-                className={`px-3 py-1 text-sm rounded-sm transition-colors ${currentType === 'pie' ? 'bg-white shadow-sm text-sky-600 font-medium' : 'text-gray-500 hover:text-gray-700'
+                className={`px-3 py-1 text-sm rounded-sm transition-colors ${currentType === 'pie' ? 'bg-white shadow-sm text-sky-600 dark:bg-gray-600 dark:text-sky-400 font-medium' : 'text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white'
                     }`}
             >
                 Pie
@@ -194,14 +193,14 @@ const StatisticsPage: React.FC = () => {
             <h1 className="text-2xl font-semibold text-sky-700 mb-6">Statistics</h1>
 
             {/* Date Filter */}
-            <div className="bg-white p-4 rounded-lg shadow-sm mb-6 flex gap-4 items-end">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm mb-6 flex gap-4 items-end">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Start Date</label>
                     <input
                         type="date"
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-md focus:ring-sky-500"
+                        className="px-3 py-2 border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 rounded-md focus:ring-sky-500"
                     />
                 </div>
                 <div>
@@ -210,7 +209,7 @@ const StatisticsPage: React.FC = () => {
                         type="date"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-md focus:ring-sky-500"
+                        className="px-3 py-2 border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 ounded-md focus:ring-sky-500"
                     />
                 </div>
                 <button
@@ -231,9 +230,9 @@ const StatisticsPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
                     {/* Control Type Chart */}
-                    <div className="bg-white p-6 rounded-lg shadow-md">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-medium text-gray-800">Control Type Distribution</h3>
+                            <h3 className="text-lg font-medium text-gray-800 dark:text-white">Control Type Distribution</h3>
                             {renderChartToggle(controlChartType, setControlChartType)}
                         </div>
                         <div className="h-[300px]">
@@ -242,9 +241,9 @@ const StatisticsPage: React.FC = () => {
                     </div>
 
                     {/* Aviz Medical Chart */}
-                    <div className="bg-white p-6 rounded-lg shadow-md">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-medium text-gray-800">Medical Opinion Results</h3>
+                            <h3 className="text-lg font-medium text-gray-800 dark:text-white">Medical Opinion Results</h3>
                             {renderChartToggle(avizChartType, setAvizChartType)}
                         </div>
                         <div className="h-[300px]">

@@ -8,11 +8,13 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/otiai10/gosseract/v2"
-	"go.mongodb.org/mongo-driver/mongo"
 
 	"mqtt-streaming-server/domain"
 	"mqtt-streaming-server/repository"
@@ -23,13 +25,15 @@ type BrokerHandler struct {
 	photoRepository  domain.PhotoRepository
 	deviceRepository domain.DeviceRepository
 	ocrClient        *gosseract.Client
+	reviewThreshold  float64
 }
 
-func NewBrokerHandler(db *mongo.Database, ocrClient *gosseract.Client) BrokerHandler {
+func NewBrokerHandler(db *pgxpool.Pool, ocrClient *gosseract.Client, reviewThreshold float64) BrokerHandler {
 	return BrokerHandler{
 		photoRepository:  repository.NewPhotoRepository(db),
 		deviceRepository: repository.NewDeviceRepository(db),
 		ocrClient:        ocrClient,
+		reviewThreshold:  reviewThreshold,
 	}
 }
 
@@ -51,9 +55,8 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 	// get registered device
 	device, err := b.deviceRepository.GetByID(ctx, deviceID)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if err == pgx.ErrNoRows {
 			fmt.Printf("Device ID not found: %s. Auto-registering...\n", deviceID)
-			// Auto-register the device
 			newDevice := &domain.Device{
 				DeviceID:     deviceID,
 				DeviceName:   "Unknown Device (" + deviceID + ")",
@@ -79,24 +82,27 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 	fmt.Printf("Image type: %s\n", imageType)
 
 	// Extract text from image
-	text, err := b.extractTextFromImage(body)
+	text, words, err := b.extractTextFromImage(body)
 	if err != nil {
 		fmt.Printf("Failed to extract text from image: %v\n", err)
 		text = "OCR failed"
 	}
-	
+
 	// Try to extract structured medical data
 	var medicalData *utils.MedicalData
 	if utils.IsMedicalCertificate(text) {
-		medicalData = utils.ParseMedicalCertificate(text)
+		medicalData = utils.ParseMedicalCertificate(text, words)
 		if medicalData != nil {
-			fmt.Printf("Extracted medical data: %+v\n", medicalData)
+			medicalData.NeedsReview = utils.ShouldReview(medicalData.OverallConfidence, b.reviewThreshold)
+			// Log only counts and stats — never field values (PHI).
+			fmt.Printf("Extracted medical data: fields=%d, overall_conf=%.1f, needs_review=%v\n",
+				len(medicalData.FieldConfidences), medicalData.OverallConfidence, medicalData.NeedsReview)
 		}
 	}
-	
+
 	// UTC timestamp
 	timestamp := time.Now().UTC()
-	
+
 	// Create photo with flattened medical data
 	photo := &domain.Photo{
 		ImageType: imageType,
@@ -104,7 +110,7 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 		DeviceID:  deviceID,
 		Text:      text,
 	}
-	
+
 	// Copy medical data fields directly to photo (flattened)
 	if medicalData != nil {
 		photo.UnitateMedicala = medicalData.UnitateMedicala
@@ -128,19 +134,26 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 		photo.ControlAlte = medicalData.ControlAlte
 
 		photo.AvizMedical = medicalData.AvizMedical
-		photo.AvizApt = medicalData.AvizApt
-		photo.AvizAptConditionat = medicalData.AvizAptConditionat
-		photo.AvizInaptTemporar = medicalData.AvizInaptTemporar
-		photo.AvizInapt = medicalData.AvizInapt
 
 		photo.Recomandari = medicalData.Recomandari
-		photo.Data = medicalData.Data
-		photo.DataUrmExaminari = medicalData.DataUrmExaminari
+		if !medicalData.Data.IsZero() {
+			photo.Data = medicalData.Data.Format(time.RFC3339)
+		}
+		if !medicalData.DataUrmExaminari.IsZero() {
+			photo.DataUrmExaminari = medicalData.DataUrmExaminari.Format(time.RFC3339)
+		}
+
+		photo.NeedsReview = medicalData.NeedsReview
+		photo.OverallConfidence = medicalData.OverallConfidence
+		photo.FieldConfidences = medicalData.FieldConfidences
+
+		photo.DocumentType = medicalData.DocumentType
+		photo.SchemaVersion = medicalData.SchemaVersion
 	}
-	
+
 	err = b.photoRepository.Save(ctx, photo)
 	if err != nil {
-		fmt.Printf("Failed to insert photo into MongoDB: %v\n", err)
+		fmt.Printf("Failed to insert photo into database: %v\n", err)
 		return
 	}
 	// Save photo locally
@@ -178,11 +191,11 @@ func (b BrokerHandler) RegisterDevice(_ mqtt.Client, msg mqtt.Message) {
 
 	// Check if device ID already exists
 	_, err := b.deviceRepository.GetByID(ctx, deviceID)
-	if err != nil && err != mongo.ErrNoDocuments {
+	if err != nil && err != pgx.ErrNoRows {
 		fmt.Printf("Failed to check device ID: %v\n", err)
 		return
 	}
-	if err == mongo.ErrNoDocuments {
+	if err == pgx.ErrNoRows {
 		// Device ID does not exist, insert it
 		err = b.deviceRepository.Save(ctx, &domain.Device{
 			DeviceID:     deviceID,
@@ -229,15 +242,14 @@ func (b BrokerHandler) DisconnectDevice(_ mqtt.Client, msg mqtt.Message) {
 	fmt.Println("Received message on topic:", msg.Topic())
 	message := string(msg.Payload())
 	fmt.Printf("Received device disconnection: %s\n", message)
-	
+
 	if message != "Device Disconnected" {
 		fmt.Printf("Invalid disconnection message: %s\n", message)
 		return
 	}
-	
+
 	device, err := b.deviceRepository.GetByID(ctx, deviceID)
 	if err != nil {
-		// handle error
 		return
 	}
 	if device.DeviceStatus != "active" {
@@ -248,16 +260,47 @@ func (b BrokerHandler) DisconnectDevice(_ mqtt.Client, msg mqtt.Message) {
 		DeviceStatus: "inactive",
 		DeviceName:   device.DeviceName,
 	})
+	_ = err
 }
 
-func (b BrokerHandler) extractTextFromImage(imageData []byte) (string, error) {
-	// Use the OCR client to extract text from the image
-	b.ocrClient.SetImageFromBytes(imageData)
-	text, err := b.ocrClient.Text()
-	if err != nil {
-		return "", fmt.Errorf("failed to extract text from image: %v", err)
+// extractTextFromImage runs OCR on imageData and returns both the joined OCR
+// text and the per-word boxes it was built from. Within a layout line words are
+// joined with a single space; a newline is inserted whenever Tesseract reports
+// a new block, paragraph or line — the medical parser's regexes depend on
+// newlines. Each WordBox records its byte offset into the returned text.
+func (b BrokerHandler) extractTextFromImage(imageData []byte) (string, []utils.WordBox, error) {
+	if err := b.ocrClient.SetImageFromBytes(imageData); err != nil {
+		return "", nil, fmt.Errorf("failed to set image for OCR: %w", err)
 	}
-	return text, nil
+
+	// Verbose boxes carry Tesseract's own block/paragraph/line numbers, which
+	// is what lets us rebuild newlines from the flat word stream.
+	boxes, err := b.ocrClient.GetBoundingBoxesVerbose()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to extract text from image: %w", err)
+	}
+
+	var sb strings.Builder
+	words := make([]utils.WordBox, 0, len(boxes))
+	for i, box := range boxes {
+		if i > 0 {
+			prev := boxes[i-1]
+			if box.BlockNum != prev.BlockNum || box.ParNum != prev.ParNum || box.LineNum != prev.LineNum {
+				sb.WriteByte('\n')
+			} else {
+				sb.WriteByte(' ')
+			}
+		}
+		words = append(words, utils.WordBox{
+			Word:       box.Word,
+			Confidence: box.Confidence,
+			BBox:       box.Box,
+			Offset:     sb.Len(),
+		})
+		sb.WriteString(box.Word)
+	}
+
+	return sb.String(), words, nil
 }
 
 func (b BrokerHandler) HandleCommand(_ mqtt.Client, msg mqtt.Message) {

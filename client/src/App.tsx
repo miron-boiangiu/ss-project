@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import Navbar from './components/navbar';
 import HomePage from './pages/homePage';
@@ -12,6 +13,35 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 const Layout = () => {
   const navigate = useNavigate();
   const { isLoggedIn, logout } = useAuth();
+
+  // --- LOGICA PENTRU DARK MODE ---
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    // La încărcare, verificăm dacă utilizatorul are deja o preferință salvată
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+      setIsDarkMode(true);
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    setIsDarkMode((prev: boolean) => {
+      const newTheme = !prev;
+      if (newTheme) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+      }
+      return newTheme;
+    });
+  };
+  // -------------------------------
 
   // Left-side buttons (only shown when logged in)
   const leftButtons = isLoggedIn
@@ -38,6 +68,12 @@ const Layout = () => {
   const rightButtons = isLoggedIn
     ? [
       {
+        // Butonul de temă pentru utilizatori logați
+        text: isDarkMode ? '☀️ Light' : '🌙 Dark',
+        variant: 'secondary' as const,
+        onClick: toggleTheme
+      },
+      {
         text: 'Logout',
         variant: 'outline' as const,
         onClick: () => {
@@ -47,6 +83,12 @@ const Layout = () => {
       }
     ]
     : [
+      {
+        // Butonul de temă pentru vizitatori
+        text: isDarkMode ? '☀️ Light' : '🌙 Dark',
+        variant: 'secondary' as const,
+        onClick: toggleTheme
+      },
       {
         text: 'Login',
         variant: 'outline' as const,
@@ -60,7 +102,8 @@ const Layout = () => {
     ];
 
   return (
-    <>
+    // Am adăugat și aici o clasă pentru a ne asigura că fundalul întregii pagini se schimbă
+    <div className="min-h-screen bg-white text-black dark:bg-gray-900 dark:text-white transition-colors duration-300">
       <Navbar
         title="Security of Systems - First Force"
         leftButtons={leftButtons}
@@ -69,7 +112,7 @@ const Layout = () => {
       <div className="pt-16 px-4">
         <Outlet />
       </div>
-    </>
+    </div>
   );
 };
 
