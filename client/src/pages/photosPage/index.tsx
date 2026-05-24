@@ -11,14 +11,60 @@ interface Device {
   device_status: string;
 }
 
-// Interface for photo data
-interface Photo {
+// Interface for photo data.
+//
+// Existing fields (id, timestamp, image_type, presigned_url, device_id, text)
+// have been on the wire forever. The structured medical fields and the new
+// confidence/schema fields have been returned by the API since PR 1; the UI
+// just ignored them until PR 3. All new fields are optional (`?`) because
+// legacy DB rows may pre-date the post-PR-1 columns.
+//
+// Intentionally omitted: aviz_apt / aviz_apt_conditionat / aviz_inapt_temporar /
+// aviz_inapt. The postgres migration dropped these from the Photo table —
+// consumers should rely on the derived textual `aviz_medical` field instead.
+export interface Photo {
   id: string;
   timestamp: string;
   image_type: string;
   presigned_url: string;
   device_id: string;
   text: string;
+
+  // Confidence + schema metadata (PR 1 + PR 2).
+  needs_review?: boolean;
+  overall_confidence?: number;
+  field_confidences?: Record<string, number>;
+  document_type?: string;
+  schema_version?: string;
+
+  // Structured medical fields, snake_case to match the backend JSON tags.
+  nume?: string;
+  prenume?: string;
+  cnp?: string;
+  unitate_medicala?: string;
+  adresa_unitate_medicala?: string;
+  telefon_unitate_medicala?: string;
+  numar_fisa?: string;
+  societate_unitate?: string;
+  adresa_angajator?: string;
+  telefon_angajator?: string;
+  profesie_functie?: string;
+  loc_de_munca?: string;
+  tip_control?: string;
+  aviz_medical?: string;
+  recomandari?: string;
+  data?: string;
+  data_urm_examinari?: string;
+
+  // Underlying checkbox booleans. The grid renders a grouped summary derived
+  // from tip_control / aviz_medical, so these aren't shown directly — they're
+  // included for completeness and possible future per-row use.
+  control_angajare?: boolean;
+  control_periodic?: boolean;
+  control_adaptare?: boolean;
+  control_reluare?: boolean;
+  control_supraveghere?: boolean;
+  control_alte?: boolean;
 }
 
 // Interface for search parameters to store in localStorage
