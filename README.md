@@ -2,29 +2,61 @@
 
 IoT image capture platform that receives photos from devices via MQTT, performs OCR (Tesseract), extracts structured data from Romanian medical certificates, and provides a web interface for browsing and searching captured images.
 
-## Quick Start
+## Secrets
 
-1. Copy the example environment file and fill in your values:
+### Environment secrets
+
+Copy the example environment file and fill in your values:
 
 ```bash
 cp ENV_EXAMPLE .env
-# Edit .env — at minimum, generate an encryption key:
-# openssl rand -hex 32
 ```
 
+At minimum, generate a random 32-byte hex key for `ENCRYPTION_KEY` and a strong value for `JWT_SECRET`:
+
+```bash
+# Generate ENCRYPTION_KEY (32 bytes, hex-encoded)
+openssl rand -hex 32
+
+# Generate JWT_SECRET
+openssl rand -hex 32
+```
+
+### TLS certificates (mTLS for MQTT)
+
+The MQTT broker and API communicate over TLS with mutual authentication.  
+Generate the CA, server, and client certificates:
+
+```bash
+./scripts/generate-certs.sh
+```
+
+This creates the following files in `./secrets/`:
+
+| Secret file       | Used by   | Mounted in container at       |
+|-------------------|-----------|-------------------------------|
+| `ca.crt`          | broker, go-api | `/run/secrets/ca.crt`    |
+| `server.crt`      | broker    | `/run/secrets/server.crt`     |
+| `server.key`      | broker    | `/run/secrets/server.key`     |
+| `web.crt`         | go-api    | `/run/secrets/web.crt`        |
+| `web.key`         | go-api    | `/run/secrets/web.key`        |
+| `python-sender-1.*` / `folder-uploader.*` | client devices | — |
+
+Secrets are defined under the top-level `secrets:` key in `docker-compose.yml` and mounted into containers at `/run/secrets/`. The broker reads them directly from its config (`broker/mosquitto.conf`), while `server/main.go` loads `web.crt`/`web.key` for its MQTT client cert and `ca.crt` to verify the broker.
+
+## Quick Start
+
+1. Generate secrets and configure the environment (see [Secrets](#secrets) above).
 2. Start all services:
-
-```bash
-docker compose up --build
-```
-
+   ```bash
+   docker compose up --build
+   ```
 3. Start the frontend dev server (in a separate terminal):
-
-```bash
-cd client
-yarn install
-yarn dev
-```
+   ```bash
+   cd client
+   yarn install
+   yarn dev
+   ```
 
 The API is available at `http://localhost:8080` and the frontend at `http://localhost:5173`.
 
@@ -34,7 +66,7 @@ The API is available at `http://localhost:8080` and the frontend at `http://loca
 |----------|------|------------------------------------|
 | go-api   | 8080 | REST API (Go)                      |
 | postgres | 5432 | PostgreSQL database                |
-| broker   | 1883 | Mosquitto MQTT broker              |
+| broker   | 8883 | Mosquitto MQTT broker (mTLS)       |
 | client   | 5173 | React/Vite frontend (run locally)  |
 
 ## Architecture
