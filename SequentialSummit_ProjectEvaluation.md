@@ -33,8 +33,21 @@
 
 **Architecture:**
 ```
-IoT Devices → MQTT Broker (Mosquitto, mTLS) → Go API (OCR + Parser) → PostgreSQL → React Frontend
+                                                ┌────────────────────────────┐
+                                                │   ocr-service (sandboxed)  │
+                                                │   • distroless, no shell   │
+                                                │   • cap_drop ALL, ro FS    │
+                                                │   • internal-only network  │
+                                                └────────────▲───────────────┘
+                                                             │ HTTP /ocr
+                                                             │
+IoT Devices → MQTT Broker (Mosquitto, mTLS) → Go API (parser, RBAC, encryption)
+                                                             │
+                                                             ▼
+                                                       PostgreSQL ◄── React Frontend
 ```
+
+OCR runs in a **sibling container** isolated from the API's secrets, the database, and the internet. The API process no longer links against libtesseract (built with `CGO_ENABLED=0`, shipped on distroless/static). A code-execution bug in the OCR engine cannot reach the encryption key, JWT secret, or DB credentials.
 
 ### Default OSSF Criticality Score Result
 
@@ -65,7 +78,8 @@ IoT Devices → MQTT Broker (Mosquitto, mTLS) → Go API (OCR + Parser) → Post
 |---------|-------------|--------|
 | MQTT Image Ingestion | Devices send images via MQTT (`ssproject/images/{device_id}`) | ✅ Implemented |
 | Device Registration | Devices self-register via `register/{device_id}` topic | ✅ Implemented |
-| OCR Text Extraction | Tesseract OCR with Romanian language support | ✅ Implemented |
+| OCR Text Extraction | Tesseract OCR (Romanian + English) running in a sandboxed `ocr-service` container | ✅ Implemented |
+| OCR Sandboxing | `ocr-service` in distroless container: `cap_drop: ALL`, `no-new-privileges`, read-only rootfs, non-root user, internal-only Docker network (no internet/DB/broker reachability), resource limits, no host port exposure. CI-enforced via `scripts/verify-sandbox.sh` (15 hardening assertions) | ✅ Implemented |
 | Medical Certificate Parsing | Extracts structured data (CNP, name, medical opinion, etc.) | ✅ Implemented |
 | JSON Schema Validation | Validates parsed output against `medical-data.v1.json` | ✅ Implemented |
 | Per-Field Confidence Scoring | Confidence score per extracted field with review threshold | ✅ Implemented |
@@ -86,17 +100,23 @@ IoT Devices → MQTT Broker (Mosquitto, mTLS) → Go API (OCR + Parser) → Post
 | mTLS MQTT Design | mTLS implementation design doc | `docs/mtls-mqtt.md` |
 | RBAC Design | Role-based access control design | `docs/rbac.md` |
 | OCR Extraction Design | OCR subsystem design with JSON Schema | `docs/ocr-extraction.md` |
+| OCR Sandbox Design | OCR isolation, threat model, hardening contract | `docs/ocr-sandbox.md` |
 | Frontend README | Frontend-specific setup and usage | `client/README.md` |
 | Medical Images Guide | Guide for uploading medical certificate images | `medical-images/README.md` |
 
 ### CI/CD Evidence
 
 - **GitHub Actions** workflow defined in `.github/workflows/ci.yml`
-- Triggers on push / PR to `main` branch
+- Triggers on push / PR to `main` branch + `workflow_dispatch` (manual)
 - Jobs:
-  1. Go backend: `go build`, `go test` with coverage
+  1. Go backend: `go build` (CGO disabled), `go test` with coverage
   2. React frontend: `yarn lint`, `yarn build`
-  3. Docker build for API image
+  3. Generate TLS certificates for Docker secrets (`./scripts/generate-certs.sh`)
+  4. Build both Docker images via `docker compose build` (go-api + ocr-service)
+  5. Boot the full stack (`docker compose up -d --wait`)
+  6. Run `./scripts/verify-sandbox.sh` — 15 hardening assertions (distroless, no caps, read-only FS, non-root, internal-only network, no exposed ports, resource limits)
+  7. Tear down on completion; dump container logs on failure
+- A separate **CodeQL** workflow runs static analysis on every push / PR
 - Artifacts: test results and coverage reports uploaded
 
 #### Execution Steps
@@ -113,13 +133,17 @@ docker compose up --build
 # 3. Start frontend (separate terminal)
 cd client && yarn install && yarn dev
 
-# 4. Send test images
+# 4. Verify sandbox configuration (15 hardening assertions)
+./scripts/verify-sandbox.sh
+
+# 5. Send test images
 python3 scripts/upload_folder.py medical-images/
 ```
 
 API: `http://localhost:8080`  
 Frontend: `http://localhost:5173`  
-MQTT Broker: `localhost:8883` (mTLS)
+MQTT Broker: `localhost:8883` (mTLS)  
+OCR Service: not exposed to host — reachable only from `go-api` over the internal `ocr-net`
 
 ---
 
@@ -127,23 +151,57 @@ MQTT Broker: `localhost:8883` (mTLS)
 
 ### Threat Modeling & Mitigations
 
-> **TODO** 
->
-**Currently implemented security mitigations:**
-- mTLS for MQTT (mutual certificate verification, `require_certificate true`)
-- JWT authentication with 24h token expiry and HMAC-SHA256 signing
-- RBAC (user/admin roles)
-- AES-256-GCM encryption for sensitive PHI fields at rest
-- bcrypt password hashing
-- CORS configuration
+We model three primary attacker positions and trace each through the system to identify trust boundaries and mitigations.
+
+#### Threat 1 — Malicious image content (highest impact)
+
+**Attacker capability**: any party able to publish on `ssproject/images/{device_id}` (a device on the same network as the broker; pre-mTLS, anyone) can submit arbitrary bytes labeled as an image. The image flows through libtesseract, libleptonica, and image decoders (libjpeg/libpng/libtiff), which are dense C/C++ code with a long history of *out-of-bounds write*, *heap overflow*, and *integer overflow* CVEs.
+
+**Trophy if RCE succeeds in the OCR engine**:
+- `ENCRYPTION_KEY` (AES-256-GCM master key for PHI)
+- `JWT_SECRET` (forges tokens for any role)
+- PostgreSQL credentials → exfiltration of every record
+- MQTT broker connection → command devices, push malicious payloads back to them
+- Public-internet egress → exfiltrate to C2
+
+**Mitigations (layered defense)**:
+1. **Process isolation** — OCR moved into a sibling container (`ocr-service/`). The Go API is built with `CGO_ENABLED=0` and contains no libtesseract; an exploit against the OCR engine cannot run inside the API process.
+2. **Distroless runtime** — `ocr-service` ships on `gcr.io/distroless/cc-debian12:nonroot`. No shell, no package manager, no busybox utilities — post-exploit tooling is unavailable.
+3. **Capability stripping** — `cap_drop: ALL` removes every Linux capability; `no-new-privileges:true` prevents setuid escalation.
+4. **Read-only root filesystem** — attacker cannot persist a dropper or modify the binary; `/tmp` is a 64 MiB tmpfs for tesseract's internal use only.
+5. **Non-root user** — runs as uid 65532 (`nonroot`), so kernel privilege boundaries remain intact.
+6. **Network isolation** — `ocr-service` sits on a Docker network with `internal: true`. No DNS resolution or routing to the public internet, to `postgres`, or to the MQTT broker. The only reachable peer is `go-api`.
+7. **No host exposure** — the OCR HTTP port (9090) is *not* mapped to the host; verified explicitly by `verify-sandbox.sh`.
+8. **Resource limits** — `mem_limit: 512m`, `pids_limit: 256`, `cpus: 1.5` bound damage from decompression bombs / fork bombs.
+9. **Magic-byte input validation** — `image.DecodeConfig` rejects non-image bytes before libtesseract sees them (defense in depth; the sandbox is the real defense).
+10. **CI-enforced contract** — `scripts/verify-sandbox.sh` runs in CI on every PR and asserts each of the above; regressions break the build.
+
+#### Threat 2 — Unauthenticated MQTT publisher
+
+**Mitigation**: mTLS on port 8883 with `require_certificate true`. Both broker and clients must present certificates signed by our CA. Without a valid client certificate, the broker refuses the connection. Plain-text 1883 is no longer accepted in production configuration.
+
+#### Threat 3 — Stolen database access / disk compromise
+
+**Mitigation**: AES-256-GCM encryption applied at the application layer to all PHI fields (CNP, names, addresses, phone numbers, medical recommendations, employer details) before being written to PostgreSQL. The encryption key never touches disk — provided via `ENCRYPTION_KEY` environment variable at startup. Passwords are hashed with bcrypt (default cost factor). A database dump alone leaks no PHI.
+
+**Currently implemented security mitigations (summary):**
+- **OCR sandboxing**: distroless `ocr-service` container with `cap_drop: ALL`, `no-new-privileges`, read-only rootfs, non-root user, on `internal: true` Docker network with no external/DB/broker reachability and no host port exposure (see Threat 1 above)
+- **API hardening**: `go-api` is also distroless (`gcr.io/distroless/static-debian12:nonroot`) with no shell and `CGO_ENABLED=0` — no C dependencies linked in
+- **CI-enforced sandbox contract**: `scripts/verify-sandbox.sh` runs in CI; any regression in hardening flags fails the build
+- **mTLS for MQTT**: mutual certificate verification (`require_certificate true`), port 8883 only
+- **JWT authentication**: 24h token expiry, HMAC-SHA256 signing
+- **RBAC**: user (read-only) vs. admin (full access) enforced in route middleware
+- **AES-256-GCM encryption** for PHI at rest (CNP, names, addresses, phones, employer fields, recommendations)
+- **bcrypt** password hashing
+- **CORS** configuration on the HTTP API
 
 ### MISRA / CERT Compliance
 
-Static analysis was performed using `go vet`, `staticcheck`, `golangci-lint`, and additional Go analysis tools.
+Static analysis was performed using `go vet`, `staticcheck`, `golangci-lint`, and additional Go analysis tools. The outputs below are from a run prior to the OCR sandboxing refactor; `go vet` was re-verified clean after the refactor. Line numbers in `staticcheck` / `golangci-lint` / `shadow` outputs may have shifted in `broker/broker.go` and `main.go`, which were significantly rewritten.
 
 #### Analysis Summary by Tool
 
-**1. `go vet ./...`**
+**1. `go vet ./...`** *(re-run after sandboxing refactor)*
 ```
 (no issues found)
 ```
@@ -208,38 +266,41 @@ utils/medical_parser_schema_test.go:28:5: declaration of "err" shadows declarati
 ### Testing & Coverage
 
 **Test Statistics:**
-- Total test functions: **42** (across 6 test files)
-- Test files: `broker_test.go`, `device_test.go`, `photo_test.go`, `user_test.go`, `medical_parser_test.go`, `medical_parser_schema_test.go`
+- Total test functions: **35** unit tests + **1** fuzz target (across 7 test files)
+- Test files: `broker_test.go`, `device_test.go`, `photo_test.go`, `user_test.go`, `medical_parser_test.go`, `medical_parser_schema_test.go`, `medical_parser_fuzz_test.go`
 - Mock package: Generated mocks at `server/mocks/domain_mock.go`
 
 | Package | Test File | Tests |
 |---------|-----------|-------|
-| broker | `broker/broker_test.go` | Device registration & disconnection (8 tests) |
-| routes | `routes/device_test.go` | Device API endpoints |
-| routes | `routes/photo_test.go` | Photo API endpoints |
-| routes | `routes/user_test.go` | User auth endpoints |
-| utils | `utils/medical_parser_test.go` | OCR parsing logic |
-| utils | `utils/medical_parser_schema_test.go` | JSON Schema validation |
+| broker | `broker/broker_test.go` | Device registration placeholder (1 test, table-driven, awaiting cases post-refactor) |
+| routes | `routes/device_test.go` | Device API endpoints (5 tests) |
+| routes | `routes/photo_test.go` | Photo API endpoints (7 tests) |
+| routes | `routes/user_test.go` | User auth endpoints (9 tests) |
+| utils | `utils/medical_parser_test.go` | OCR parsing logic (11 tests) |
+| utils | `utils/medical_parser_schema_test.go` | JSON Schema validation (2 tests) |
+| utils | `utils/medical_parser_fuzz_test.go` | Property-based fuzzing for parser invariants (1 fuzz target) |
 
-**Code Coverage (obtained `2026-05-24`):**
+**Code Coverage (refreshed after the sandboxing refactor):**
 
 ```
 $ go test $(go list ./... | grep -v -E 'schema|mocks|domain') -coverprofile=coverage.out && go tool cover -func=coverage.out
 
-ok  	mqtt-streaming-server/broker	0.008s	coverage: 29.1% of statements
-ok  	mqtt-streaming-server/routes	0.798s	coverage: 39.9% of statements
-ok  	mqtt-streaming-server/utils	0.011s	coverage: 34.8% of statements
+ok  	mqtt-streaming-server/broker	0.004s	coverage: 0.0% of statements
+ok  	mqtt-streaming-server/routes	0.600s	coverage: 40.8% of statements
+ok  	mqtt-streaming-server/utils	0.010s	coverage: 32.1% of statements
 
-total:	(statements)			26.1%
+total:	(statements)			21.4%
 ```
 
 | Package | Coverage |
 |---------|----------|
-| `broker` | 29.1% |
-| `routes` | 39.9% |
-| `utils` | 34.8% |
+| `broker` | 0.0% (existing test was a TODO placeholder; broker was refactored to depend on `utils.OCRRunner` interface — needs new mock-based tests) |
+| `routes` | 40.8% |
+| `utils` | 32.1% |
 | `repository` | 0.0% (no tests) |
-| **Overall** (excl. schema/mocks/domain) | **26.1%** |
+| **Overall** (excl. schema/mocks/domain) | **21.4%** |
+
+The drop from 26.1% → 21.4% is explained by the broker refactor: the previous broker test exercised gosseract directly; after sandboxing it depends on an `OCRRunner` interface and the existing test was reduced to a table-driven placeholder. Re-establishing broker coverage with mock-based tests is the next testing priority.
 
 **Testing Strategy:**
 - Unit tests for OCR parsing and medical data extraction
@@ -264,16 +325,22 @@ total:	(statements)			26.1%
 - Location: `server/sbom.cdx.json`
 - Scope: Go module dependencies
 
-**Key Dependencies:**
+**Key Dependencies (server/):**
 | Dependency | Version | Purpose |
 |------------|---------|---------|
-| github.com/eclipse/paho.mqtt.golang | v1.5.1 | MQTT client |
+| github.com/eclipse/paho.mqtt.golang | v1.5.1 | MQTT client (mTLS) |
 | github.com/golang-jwt/jwt/v4 | v4.5.2 | JWT auth |
 | github.com/jackc/pgx/v5 | v5.9.2 | PostgreSQL driver |
-| github.com/otiai10/gosseract/v2 | v2.4.1 | Tesseract OCR |
 | github.com/santhosh-tekuri/jsonschema/v6 | v6.0.2 | JSON Schema validation |
 | golang.org/x/crypto | v0.45.0 | bcrypt + crypto utilities |
 | github.com/aws/aws-sdk-go-v2 | v1.41.5 | AWS S3 integration |
+
+> **Note**: `github.com/otiai10/gosseract/v2` (Tesseract OCR binding) is **no longer a dependency of the API server**. After the sandboxing refactor, OCR runs out-of-process in the `ocr-service` container, and `server/go.mod` is now CGO-free.
+
+**Key Dependencies (ocr-service/):**
+| Dependency | Version | Purpose |
+|------------|---------|---------|
+| github.com/otiai10/gosseract/v2 | v2.4.1 | Tesseract OCR (via libtesseract / leptonica) |
 
 > Vulnerability scan run against the SBOM (via `grype dir:. --only-fixed`):
 > ```
@@ -294,9 +361,7 @@ All 6 vulnerabilities found by Grype in the SBOM scan were resolved via dependen
 
 **Fix:** Ran `go get <dependency>@<patched-version>` for each vulnerable package, followed by `go mod tidy` to clean up the dependency graph. Verified with `go build ./...`, `go vet ./...`, `go test ./...`, and a final Grype scan.
 
-## 5. Team Contributions
-
-Git contribution statistics gathered via `git shortlog` and `git log --numstat --all`.
+## 5. Team Contri-Git contribution statistics gathered via `git shortlog` and `git log --numstat --all --no-merges --use-mailmap`. A `.mailmap` file at the repository root canonicalizes alternate identities (web-only commits, alternate emails) to the names below.
 
 | Team Member | Lines Added | Lines Removed | Number of Commits |
 |-------------|------------|---------------|-------------------|
@@ -304,7 +369,7 @@ Git contribution statistics gathered via `git shortlog` and `git log --numstat -
 | Andrei Gorneanu | 1,771 | 281 | 23 |
 | Teodor Suteu | 2,581 | 427 | 10 |
 | Vlad Grigore | 1,190 | 82 | 5 |
-| Andrei Seceleanu | 749 | 551 | 4 |
+| Andrei Seceleanu | 763 | 565 | 9 |
 
 ---
 
