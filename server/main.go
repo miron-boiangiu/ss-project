@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/http"
 	"os"
@@ -61,9 +63,26 @@ func main() {
 
 	brokerHandler := broker.NewBrokerHandler(pool, ocrClient, readReviewThreshold())
 
+	tlsConfig := &tls.Config{
+		RootCAs: x509.NewCertPool(),
+	}
+	caCert, err := os.ReadFile("/run/secrets/ca.crt")
+	if err != nil {
+		panic(fmt.Errorf("failed to read CA cert: %w", err))
+	}
+	if !tlsConfig.RootCAs.AppendCertsFromPEM(caCert) {
+		panic("failed to parse CA certificate")
+	}
+	clientCert, err := tls.LoadX509KeyPair("/run/secrets/web.crt", "/run/secrets/web.key")
+	if err != nil {
+		panic(fmt.Errorf("failed to load client cert: %w", err))
+	}
+	tlsConfig.Certificates = []tls.Certificate{clientCert}
+
 	opts := mqtt.NewClientOptions()
-	opts.AddBroker("tcp://broker:1883")
+	opts.AddBroker("tls://broker:8883")
 	opts.SetClientID("web")
+	opts.SetTLSConfig(tlsConfig)
 
 	// Start the connection
 	client := mqtt.NewClient(opts)

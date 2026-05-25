@@ -8,6 +8,7 @@ services:
     env_file: .env
     environment:
       - MQTT_HOST_IP=${HOST_IP:-host.docker.internal}
+      - MQTT_TLS_PORT=8883
       - OCR_SERVICE_URL=http://ocr-service:9090
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -22,6 +23,10 @@ services:
       - 8080:8080
     volumes:
       - ./uploads:/app/uploads
+    secrets:
+      - ca_crt
+      - web_crt
+      - web_key
     networks:
       - backend
       - ocr-net
@@ -51,14 +56,17 @@ services:
     # No `ports:` block — the service is only reachable from inside ocr-net.
 
   broker:
-    user: "${UID}:${GID}"
     image: eclipse-mosquitto:latest
     container_name: broker
     hostname: broker
     ports:
-      - "1883:1883"
+      - "8883:8883"
     volumes:
       - ./broker/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    secrets:
+      - ca_crt
+      - server_crt
+      - server_key
     networks:
       - backend
 
@@ -90,3 +98,15 @@ networks:
   # other members of this network (i.e. go-api).
   ocr-net:
     internal: true
+
+secrets:
+  ca_crt:
+    file: ./secrets/ca.crt
+  server_crt:
+    file: ./secrets/server.crt
+  server_key:
+    file: ./secrets/server.key
+  web_crt:
+    file: ./secrets/web.crt
+  web_key:
+    file: ./secrets/web.key

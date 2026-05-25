@@ -31,7 +31,7 @@ docker compose up -d
 
 echo ""
 echo "Docker services restarted!"
-echo "MQTT Broker: ${HOST_IP}:1883"
+echo "MQTT Broker (mTLS): ${HOST_IP}:8883"
 echo ""
 
 # Restart using the start script

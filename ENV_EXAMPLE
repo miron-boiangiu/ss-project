@@ -15,6 +15,7 @@ ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
 # MQTT host IP (used by clients to connect to the broker)
 HOST_IP=host.docker.internal
+MQTT_TLS_PORT=8883
 
 # OCR sandbox (sandboxed ocr-service container)
 # OCR_SERVICE_URL defaults to http://ocr-service:9090 inside docker-compose;
