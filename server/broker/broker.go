@@ -8,31 +8,34 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
-	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/otiai10/gosseract/v2"
 
 	"mqtt-streaming-server/domain"
 	"mqtt-streaming-server/repository"
 	"mqtt-streaming-server/utils"
 )
 
+// ocrCallTimeout caps how long we will wait on the sandboxed ocr-service for a
+// single image. The HTTP client also has its own deadline; this is the upper
+// bound applied per request via context.
+const ocrCallTimeout = 90 * time.Second
+
 type BrokerHandler struct {
 	photoRepository  domain.PhotoRepository
 	deviceRepository domain.DeviceRepository
-	ocrClient        *gosseract.Client
+	ocr              utils.OCRRunner
 	reviewThreshold  float64
 }
 
-func NewBrokerHandler(db *pgxpool.Pool, ocrClient *gosseract.Client, reviewThreshold float64) BrokerHandler {
+func NewBrokerHandler(db *pgxpool.Pool, ocr utils.OCRRunner, reviewThreshold float64) BrokerHandler {
 	return BrokerHandler{
 		photoRepository:  repository.NewPhotoRepository(db),
 		deviceRepository: repository.NewDeviceRepository(db),
-		ocrClient:        ocrClient,
+		ocr:              ocr,
 		reviewThreshold:  reviewThreshold,
 	}
 }
@@ -81,11 +84,16 @@ func (b BrokerHandler) HandlePhoto(_ mqtt.Client, msg mqtt.Message) {
 	}
 	fmt.Printf("Image type: %s\n", imageType)
 
-	// Extract text from image
-	text, words, err := b.extractTextFromImage(body)
+	// OCR runs out-of-process in a sandboxed container; we only ever send
+	// image bytes and receive parsed text. A crash or compromise of the OCR
+	// engine cannot reach this process.
+	ocrCtx, cancel := context.WithTimeout(ctx, ocrCallTimeout)
+	text, words, err := b.ocr.Extract(ocrCtx, body)
+	cancel()
 	if err != nil {
 		fmt.Printf("Failed to extract text from image: %v\n", err)
 		text = "OCR failed"
+		words = nil
 	}
 
 	// Try to extract structured medical data
@@ -261,46 +269,6 @@ func (b BrokerHandler) DisconnectDevice(_ mqtt.Client, msg mqtt.Message) {
 		DeviceName:   device.DeviceName,
 	})
 	_ = err
-}
-
-// extractTextFromImage runs OCR on imageData and returns both the joined OCR
-// text and the per-word boxes it was built from. Within a layout line words are
-// joined with a single space; a newline is inserted whenever Tesseract reports
-// a new block, paragraph or line — the medical parser's regexes depend on
-// newlines. Each WordBox records its byte offset into the returned text.
-func (b BrokerHandler) extractTextFromImage(imageData []byte) (string, []utils.WordBox, error) {
-	if err := b.ocrClient.SetImageFromBytes(imageData); err != nil {
-		return "", nil, fmt.Errorf("failed to set image for OCR: %w", err)
-	}
-
-	// Verbose boxes carry Tesseract's own block/paragraph/line numbers, which
-	// is what lets us rebuild newlines from the flat word stream.
-	boxes, err := b.ocrClient.GetBoundingBoxesVerbose()
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to extract text from image: %w", err)
-	}
-
-	var sb strings.Builder
-	words := make([]utils.WordBox, 0, len(boxes))
-	for i, box := range boxes {
-		if i > 0 {
-			prev := boxes[i-1]
-			if box.BlockNum != prev.BlockNum || box.ParNum != prev.ParNum || box.LineNum != prev.LineNum {
-				sb.WriteByte('\n')
-			} else {
-				sb.WriteByte(' ')
-			}
-		}
-		words = append(words, utils.WordBox{
-			Word:       box.Word,
-			Confidence: box.Confidence,
-			BBox:       box.Box,
-			Offset:     sb.Len(),
-		})
-		sb.WriteString(box.Word)
-	}
-
-	return sb.String(), words, nil
 }
 
 func (b BrokerHandler) HandleCommand(_ mqtt.Client, msg mqtt.Message) {

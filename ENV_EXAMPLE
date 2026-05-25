@@ -17,6 +17,12 @@ ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 HOST_IP=host.docker.internal
 MQTT_TLS_PORT=8883
 
+# OCR sandbox (sandboxed ocr-service container)
+# OCR_SERVICE_URL defaults to http://ocr-service:9090 inside docker-compose;
+# set OCR_TIMEOUT_SECONDS to override the 90s per-request timeout.
+# OCR_SERVICE_URL=http://ocr-service:9090
+# OCR_TIMEOUT_SECONDS=90
+
 # AWS S3 (optional — only needed if using S3 for photo storage)
 AWS_ACCESS_KEY=your-aws-access-key
 AWS_SECRET_KEY=your-aws-secret-key

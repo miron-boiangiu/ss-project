@@ -14,7 +14,6 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/otiai10/gosseract/v2"
 
 	"mqtt-streaming-server/broker"
 	"mqtt-streaming-server/routes"
@@ -55,9 +54,13 @@ func main() {
 
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
-	ocrClient := gosseract.NewClient()
-	ocrClient.SetLanguage("eng", "ron")
-	defer ocrClient.Close()
+	// OCR runs in a sandboxed sibling container; this process never links
+	// against libtesseract directly. See ocr-service/ for the sandbox setup.
+	ocrURL := getenv("OCR_SERVICE_URL", "http://ocr-service:9090")
+	ocrTimeout := time.Duration(readOCRTimeoutSeconds()) * time.Second
+	ocrClient := utils.NewHTTPOCRClient(ocrURL, ocrTimeout)
+	fmt.Printf("Using OCR service at %s (timeout=%s)\n", ocrURL, ocrTimeout)
+
 	brokerHandler := broker.NewBrokerHandler(pool, ocrClient, readReviewThreshold())
 
 	tlsConfig := &tls.Config{
@@ -131,4 +134,27 @@ func readReviewThreshold() float64 {
 		return defaultThreshold
 	}
 	return t
+}
+
+// readOCRTimeoutSeconds returns the per-request timeout for calls to the OCR
+// service. Configured via OCR_TIMEOUT_SECONDS; defaults to 90s.
+func readOCRTimeoutSeconds() int {
+	const defaultSeconds = 90
+	v := os.Getenv("OCR_TIMEOUT_SECONDS")
+	if v == "" {
+		return defaultSeconds
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		fmt.Printf("Invalid OCR_TIMEOUT_SECONDS %q, using default %d\n", v, defaultSeconds)
+		return defaultSeconds
+	}
+	return n
+}
+
+func getenv(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
 }

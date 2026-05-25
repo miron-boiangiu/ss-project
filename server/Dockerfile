@@ -1,38 +1,24 @@
+# The API container no longer links against libtesseract — OCR runs in the
+# sandboxed ocr-service container. That lets us build a fully static binary and
+# ship it on distroless/static, eliminating the shell, package manager, and
+# every C library that previously sat in this image.
 FROM golang:1.25-alpine AS build-env
 
 WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . /app
 
-# install tesseract with english language data
-RUN apk add --no-cache \
-    tesseract-ocr \
-    tesseract-ocr-dev \
-    leptonica-dev \
-    g++ \
-    tesseract-ocr-data-eng \
-    tesseract-ocr-data-ron \
-    ffmpeg \
-    && rm -rf /var/cache/apk/*
-
-# Use the platform provided by buildx/compose instead of forcing amd64
 ARG TARGETOS
 ARG TARGETARCH
-RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -o mqtt ./main.go
-FROM alpine@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build -trimpath -ldflags="-s -w" -o /out/mqtt ./main.go
+
+FROM gcr.io/distroless/static-debian12:nonroot
+
 WORKDIR /app
-COPY --from=build-env /app/mqtt /app/
-
-RUN apk add --no-cache \
-    tesseract-ocr \
-    tesseract-ocr-dev \
-    leptonica-dev \
-    g++ \
-    tesseract-ocr-data-eng \
-    tesseract-ocr-data-ron \
-    ffmpeg \
-    && rm -rf /var/cache/apk/*
-
+COPY --from=build-env /out/mqtt /app/mqtt
 
 EXPOSE 8080
-
-CMD ["./mqtt"]
+USER nonroot:nonroot
+ENTRYPOINT ["/app/mqtt"]
