@@ -1,4 +1,4 @@
-FROM golang:alpine@sha256:ef18ee7117463ac1055f5a370ed18b8750f01589f13ea0b48642f5792b234044 AS build-env
+FROM golang:1.25-alpine AS build-env
 
 WORKDIR /app
 COPY . /app
