@@ -1,27 +1,31 @@
 import React, { useState } from 'react';
 import fallbackImage from '../../assets/photo-fallback.svg';
+import MedicalFieldGrid from '../medicalFieldGrid';
+import type { Photo } from '../../pages/photosPage';
 
+// PhotoCard now consumes the full Photo object (PR 3) instead of piecemeal
+// imageUrl / extractedText / altText props. The data fields collapse into
+// `photo`; `isAdmin` and `onDelete` stay as separate parent-controlled props
+// since they're auth/callback wiring, not photo data.
 interface PhotoCardProps {
-  photoId: string;
-  imageUrl: string;
-  altText?: string;
-  extractedText?: string;
+  photo: Photo;
   isAdmin?: boolean;
   onDelete?: (photoId: string) => void;
 }
 
-const PhotoCard: React.FC<PhotoCardProps> = ({
-  photoId,
-  imageUrl,
-  altText = 'Photo',
-  extractedText = '',
-  isAdmin = false,
-  onDelete
-}) => {
+const PhotoCard: React.FC<PhotoCardProps> = ({ photo, isAdmin = false, onDelete }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Derived view of the photo for rendering. altText was previously passed in
+  // by the parent; computing it locally keeps the call site simple and the
+  // formatting consistent across pages.
+  const imageUrl = photo.presigned_url;
+  const extractedText = photo.text ?? '';
+  const altText = `Photo from ${new Date(photo.timestamp).toLocaleDateString()}`;
+  const needsReview = photo.needs_review === true;
 
   const handleImageError = () => {
     setImageError(true);
@@ -46,7 +50,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
     if (onDelete) {
-      await onDelete(photoId);
+      await onDelete(photo.id);
     }
     setShowDeleteConfirm(false);
     setIsDeleting(false);
@@ -62,6 +66,15 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
             onError={handleImageError}
             className="w-full h-full object-cover"
           />
+          {/* "Needs Review" pill — top-left, mirrors the top-right delete button. */}
+          {needsReview && (
+            <span
+              className="absolute top-2 left-2 bg-yellow-400 text-yellow-900 text-xs font-medium px-2 py-1 rounded-full"
+              title="OCR confidence below review threshold"
+            >
+              Needs Review
+            </span>
+          )}
           {isAdmin && (
             <button
               onClick={handleDeleteClick}
@@ -114,8 +127,9 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
           onClick={handleModalClick}
         >
           <div
-            className="relative bg-white rounded-xl shadow-2xl max-w-4xl max-h-[90vh] overflow-hidden transform transition-all duration-300 ease-in-out animate-scaleIn"
+            className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden transform transition-all duration-300 ease-in-out animate-scaleIn"
           >
+            {/* Top bar — absolutely positioned so it floats above the scrolling body. */}
             <div className="absolute top-0 right-0 left-0 bg-gradient-to-b from-black/50 to-transparent h-20 z-10 flex justify-between items-start p-4">
               <div className="text-white text-lg font-medium truncate pr-10">{altText}</div>
               <button
@@ -128,20 +142,32 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
               </button>
             </div>
 
-            <div className="p-4 pt-20">
-              <img
-                src={imageError ? fallbackImage : imageUrl}
-                alt={altText}
-                className="max-w-full max-h-[65vh] object-contain mx-auto rounded-md"
-              />
-            </div>
-
-            {extractedText && (
-              <div className="bg-gray-50 p-6 border-t border-gray-100">
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Extracted Text</h3>
-                <p className="text-gray-800 text-base">{extractedText}</p>
+            {/* Scrollable body — image, structured grid, collapsed raw OCR. */}
+            <div className="overflow-y-auto max-h-[90vh]">
+              <div className="p-4 pt-20">
+                <img
+                  src={imageError ? fallbackImage : imageUrl}
+                  alt={altText}
+                  className="max-w-full max-h-[65vh] object-contain mx-auto rounded-md"
+                />
               </div>
-            )}
+
+              <div className="bg-gray-50 dark:bg-gray-800 p-6 border-t border-gray-100 dark:border-gray-700">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Extracted Fields</h3>
+                <MedicalFieldGrid photo={photo} />
+              </div>
+
+              {extractedText && (
+                <details className="bg-white dark:bg-gray-900 p-6 border-t border-gray-100 dark:border-gray-700">
+                  <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Show raw OCR text
+                  </summary>
+                  <pre className="mt-3 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-400 font-mono">
+                    {extractedText}
+                  </pre>
+                </details>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -149,4 +175,4 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
   );
 };
 
-export default PhotoCard; 
+export default PhotoCard;
