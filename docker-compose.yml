@@ -19,9 +19,12 @@ services:
     volumes:
       - ./uploads:/app/uploads
     secrets:
-      - ca_crt
-      - web_crt
-      - web_key
+      - source: ca_crt
+        target: ca.crt
+      - source: web_crt
+        target: web.crt
+      - source: web_key
+        target: web.key
     networks:
       - backend
 
@@ -34,9 +37,12 @@ services:
     volumes:
       - ./broker/mosquitto.conf:/mosquitto/config/mosquitto.conf
     secrets:
-      - ca_crt
-      - server_crt
-      - server_key
+      - source: ca_crt
+        target: ca.crt
+      - source: server_crt
+        target: server.crt
+      - source: server_key
+        target: server.key
     networks:
       - backend
 
