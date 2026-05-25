@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -61,7 +62,8 @@ func main() {
 	brokerHandler := broker.NewBrokerHandler(pool, ocrClient, readReviewThreshold())
 
 	tlsConfig := &tls.Config{
-		RootCAs: x509.NewCertPool(),
+		ServerName: "broker",
+		RootCAs:    x509.NewCertPool(),
 	}
 	caCert, err := os.ReadFile("/run/secrets/ca.crt")
 	if err != nil {
@@ -81,29 +83,44 @@ func main() {
 	opts.SetClientID("web")
 	opts.SetTLSConfig(tlsConfig)
 
-	// Start the connection
+	opts.SetAutoReconnect(true)
+	opts.SetConnectRetry(true)
+	opts.SetConnectRetryInterval(5 * time.Second)
+	opts.SetMaxReconnectInterval(30 * time.Second)
+
+	opts.SetOnConnectHandler(func(c mqtt.Client) {
+		log.Println("Connected to MQTT broker")
+
+		subs := []struct {
+			topic string
+			cb    mqtt.MessageHandler
+		}{
+			{"ssproject/images/#", brokerHandler.HandlePhoto},
+			{"register/#", brokerHandler.RegisterDevice},
+			{"device/id/#", brokerHandler.DisconnectDevice},
+		}
+		for _, s := range subs {
+			if token := c.Subscribe(s.topic, 0, s.cb); token.Wait() && token.Error() != nil {
+				log.Printf("Subscribe error on %s: %v", s.topic, token.Error())
+			}
+		}
+	})
+
+	opts.SetConnectionLostHandler(func(c mqtt.Client, err error) {
+		log.Printf("MQTT connection lost: %v", err)
+	})
+
+	opts.SetReconnectingHandler(func(c mqtt.Client, opts *mqtt.ClientOptions) {
+		log.Println("Reconnecting to MQTT broker...")
+	})
+
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+		log.Printf("Failed to connect to MQTT broker: %v", token.Error())
+	} else {
+		log.Println("Initial MQTT connection established")
 	}
 
-	// Subscribe to images topic
-	if token := client.Subscribe("ssproject/images/#", 0, brokerHandler.HandlePhoto); token.Wait() && token.Error() != nil {
-		fmt.Println(token.Error())
-		os.Exit(1)
-	}
-
-	if token := client.Subscribe("register/#", 0, brokerHandler.RegisterDevice); token.Wait() && token.Error() != nil {
-		fmt.Println(token.Error())
-		os.Exit(1)
-	}
-
-	if token := client.Subscribe("device/id/#", 0, brokerHandler.DisconnectDevice); token.Wait() && token.Error() != nil {
-		fmt.Println(token.Error())
-		os.Exit(1)
-	}
-
-	// Initialize user routes
 	handler := routes.InitRoutes(pool, client)
 
 	go func() {

@@ -18,14 +18,17 @@ openssl req -x509 -new -nodes -key "${SECRETS_DIR}/ca.key" \
 gen_cert() {
   local name=$1
   local cn=$2
+  local extra_san=${3:-}
   echo "Generating certificate for '${name}' (CN=${cn})..."
   openssl genrsa -out "${SECRETS_DIR}/${name}.key" "${BITS}"
   openssl req -new -key "${SECRETS_DIR}/${name}.key" \
     -out "${SECRETS_DIR}/${name}.csr" \
     -subj "/C=RO/O=SSProject/CN=${cn}"
-  cat > "${SECRETS_DIR}/${name}.ext" <<EOF
-subjectAltName=DNS:${cn}
-EOF
+  local san="DNS:${cn}"
+  if [[ -n "${extra_san}" ]]; then
+    san="${san},${extra_san}"
+  fi
+  echo "subjectAltName=${san}" > "${SECRETS_DIR}/${name}.ext"
   openssl x509 -req -in "${SECRETS_DIR}/${name}.csr" \
     -CA "${SECRETS_DIR}/ca.crt" -CAkey "${SECRETS_DIR}/ca.key" \
     -CAcreateserial -out "${SECRETS_DIR}/${name}.crt" \
@@ -34,7 +37,7 @@ EOF
   rm -f "${SECRETS_DIR}/${name}.csr" "${SECRETS_DIR}/${name}.ext"
 }
 
-gen_cert "server" "broker"
+gen_cert "server" "broker" "IP:127.0.0.1"
 gen_cert "web" "web"
 gen_cert "python-sender-1" "python-sender-1"
 
