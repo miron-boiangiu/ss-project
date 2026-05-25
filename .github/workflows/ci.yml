@@ -74,20 +74,20 @@ jobs:
       # script that enforces the hardening contract (distroless, no caps,
       # read-only FS, network isolation, no exposed ports). Fails the build
       # if any sandbox guarantee regresses.
-       - name: Prepare .env for compose
-         run: |
-           cp ENV_EXAMPLE .env
-           sed -i "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$(openssl rand -hex 32)|" .env
-           sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 32)|" .env
-           {
-             echo "UID=$(id -u)"
-             echo "GID=$(id -g)"
-           } >> .env
+      - name: Prepare .env for compose
+        run: |
+          cp ENV_EXAMPLE .env
+          sed -i "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$(openssl rand -hex 32)|" .env
+          sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 32)|" .env
+          {
+            echo "UID=$(id -u)"
+            echo "GID=$(id -g)"
+          } >> .env
 
-       - name: Generate TLS certificates (Docker secrets)
-         run: ./scripts/generate-certs.sh
+      - name: Generate TLS certificates (Docker secrets)
+        run: ./scripts/generate-certs.sh
 
-       - name: Build images (go-api + ocr-service)
+      - name: Build images (go-api + ocr-service)
         run: docker compose build
 
       - name: Start stack
